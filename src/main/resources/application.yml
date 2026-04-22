@@ -1,75 +1,55 @@
-spring:
-  application:
-    name: loomea-service
+  spring:
+    application:
+      name: loomea-service
 
-# Production profile
-spring:
-  config:
-    activate:
-      on-profile: prod
+    datasource:
+      url: ${SPRING_DATASOURCE_URL}
+      username: ${SPRING_DATASOURCE_USERNAME}
+      password: ${SPRING_DATASOURCE_PASSWORD}
+      driver-class-name: org.postgresql.Driver
 
-  datasource:
-    url: ${SPRING_DATASOURCE_URL}
-    username: ${SPRING_DATASOURCE_USERNAME}
-    password: ${SPRING_DATASOURCE_PASSWORD}
-    driver-class-name: org.postgresql.Driver
-
-  jpa:
-    hibernate:
-      ddl-auto: update
-    properties:
+    jpa:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
+        ddl-auto: update   # change to 'validate' in production later
+      show-sql: false
+      properties:
+        hibernate:
+          dialect: org.hibernate.dialect.PostgreSQLDialect
+          format_sql: true
+      open-in-view: false
 
-app:
-  jwt:
-    secret: ${JWT_SECRET}
+    jackson:
+      serialization:
+        FAIL_ON_EMPTY_BEANS: false
 
-# JWT & Booking
-app:
-  jwt:
-    secret: loomea-dev-secret-key-change-in-production-min-256-bits-long-enough
-    expiration-ms: 86400000   # 24 hours
-    refresh-expiration-ms: 604800000  # 7 days
-  booking:
-    pending-timeout-minutes: 15
-  # Twilio SMS — leave blank for console-log fallback (dev)
-  # Set real values in env vars or prod profile for actual SMS delivery
-  twilio:
-    account-sid: ${TWILIO_ACCOUNT_SID:}
-    auth-token: ${TWILIO_AUTH_TOKEN:}
-    phone-number: ${TWILIO_PHONE_NUMBER:}
+  server:
+    port: ${PORT:8080}
 
-# OpenAPI
-springdoc:
-  api-docs:
-    path: /api-docs
-  swagger-ui:
-    path: /swagger-ui.html
+  # JWT & Booking
+  app:
+    jwt:
+      secret: ${JWT_SECRET}
+      expiration-ms: 86400000        # 24 hours
+      refresh-expiration-ms: 604800000  # 7 days
+    booking:
+      pending-timeout-minutes: 15
 
----
-# Docker profile (PostgreSQL)
-spring:
-  config:
-    activate:
-      on-profile: docker
+    # Twilio (optional — uses env vars)
+    twilio:
+      account-sid: ${TWILIO_ACCOUNT_SID:}
+      auth-token: ${TWILIO_AUTH_TOKEN:}
+      phone-number: ${TWILIO_PHONE_NUMBER:}
 
-  datasource:
-    url: ${SPRING_DATASOURCE_URL}
-    username: ${SPRING_DATASOURCE_USERNAME}
-    password: ${SPRING_DATASOURCE_PASSWORD}
-    driver-class-name: org.postgresql.Driver
+  # OpenAPI / Swagger
+  springdoc:
+    api-docs:
+      path: /api-docs
+    swagger-ui:
+      path: /swagger-ui.html
 
-  jpa:
-    hibernate:
-      ddl-auto: update
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-
-app:
-  jwt:
-    secret: ${APP_JWT_SECRET}
-
----
+  # Logging (optional but useful)
+  logging:
+    level:
+      org.springframework: INFO
+      org.hibernate.SQL: WARN
 

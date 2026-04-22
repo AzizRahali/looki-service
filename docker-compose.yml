@@ -1,47 +1,56 @@
-services:
-  # PostgreSQL database
-  postgres:
-    image: postgres:16-alpine
-    container_name: loomea-db
-    env_file:
-      - ./config.env
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-loomea}
-      POSTGRES_USER: ${SPRING_DATASOURCE_USERNAME:-loomea}
-      POSTGRES_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-loomea123}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U loomea"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+  services:
+    # PostgreSQL database
+    postgres:
+      image: postgres:16-alpine
+      container_name: loomea-db
+      restart: always
+      env_file:
+        - ./config.env
+      environment:
+        POSTGRES_DB: ${POSTGRES_DB:-loomea}
+        POSTGRES_USER: ${SPRING_DATASOURCE_USERNAME:-loomea}
+        POSTGRES_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-loomea123}
+      ports:
+        - "${POSTGRES_PORT:-5432}:5432"
+      volumes:
+        - pgdata:/var/lib/postgresql/data
+      healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U ${SPRING_DATASOURCE_USERNAME:-loomea} -d ${POSTGRES_DB:-loomea}"]
+        interval: 5s
+        timeout: 5s
+        retries: 10
 
-  # Spring Boot API
-  api:
-    build: .
-    container_name: loomea-api
-    depends_on:
-      postgres:
-        condition: service_healthy
-    env_file:
-      - ./config.env
-    environment:
-      SPRING_PROFILES_ACTIVE: prod
-    ports:
-      - "${SERVER_PORT:-8080}:8080"
+    # Spring Boot API
+    api:
+      build: .
+      container_name: loomea-api
+      restart: always
+      depends_on:
+        postgres:
+          condition: service_healthy
+      env_file:
+        - ./config.env
+      environment:
+        SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-loomea}
+        SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-loomea}
+        SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-loomea123}
+        JWT_SECRET: ${JWT_SECRET}
+        PORT: 8080
+      ports:
+        - "${SERVER_PORT:-8080}:8080"
 
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: loomea-pgadmin
-    env_file:
-      - ./config.env
-    ports:
-      - "${PGADMIN_PORT:-5050}:80"
-    depends_on:
-      - postgres
+    # pgAdmin (optional)
+    pgadmin:
+      image: dpage/pgadmin4:latest
+      container_name: loomea-pgadmin
+      restart: always
+      env_file:
+        - ./config.env
+      ports:
+        - "${PGADMIN_PORT:-5050}:80"
+      depends_on:
+        - postgres
 
-volumes:
-  pgdata:
+  volumes:
+    pgdata:
+
