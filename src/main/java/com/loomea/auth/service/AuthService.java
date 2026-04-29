@@ -8,6 +8,8 @@ import com.loomea.booking.repository.AppointmentRepository;
 import com.loomea.common.exception.BadRequestException;
 import com.loomea.common.exception.ConflictException;
 import com.loomea.common.exception.ResourceNotFoundException;
+import com.loomea.owner.entity.StaffMember;
+import com.loomea.owner.repository.StaffMemberRepository;
 import com.loomea.common.reliability.ReliabilityTier;
 import com.loomea.common.security.JwtProvider;
 import com.loomea.common.sms.SmsService;
@@ -22,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Random;
@@ -41,6 +44,7 @@ public class AuthService {
     private final AppointmentRepository appointmentRepository;
     private final ReviewRepository reviewRepository;
     private final SalonRepository salonRepository;
+    private final StaffMemberRepository staffMemberRepository;
 
     /** Step 1: create account (unverified). Returns pending response — no JWT yet. */
     @Transactional
@@ -143,6 +147,22 @@ public class AuthService {
     }
 
     @Transactional
+    public AuthResponse.UserDto uploadAvatar(UUID userId, String base64Image) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+        byte[] imageBytes = java.util.Base64.getDecoder().decode(base64Image);
+        user.setAvatarData(imageBytes);
+        user.setAvatarUrl("/api/auth/users/" + userId + "/avatar");
+        return toUserDto(userRepository.save(user));
+    }
+
+    public byte[] getAvatarData(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+        return user.getAvatarData();
+    }
+
+    @Transactional
     public AuthResponse.UserDto saveSalon(UUID userId, UUID salonId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
@@ -186,6 +206,41 @@ public class AuthService {
         }
         user.setScheduledDeletionAt(null);
         return toUserDto(userRepository.save(user));
+    }
+
+    /** Register a staff member account using a valid invite token. Returns JWT immediately. */
+    @Transactional
+    public AuthResponse registerStaff(StaffRegisterRequest request) {
+        StaffMember member = staffMemberRepository.findByInviteToken(request.getInviteToken())
+                .orElseThrow(() -> new BadRequestException("Invalid or expired invite token"));
+
+        if (member.getInviteTokenExpiresAt() == null ||
+                LocalDateTime.now().isAfter(member.getInviteTokenExpiresAt())) {
+            throw new BadRequestException("Invite token has expired. Ask your salon owner for a new invite.");
+        }
+        if (member.getLinkedUserId() != null) {
+            throw new ConflictException("This invite has already been used");
+        }
+        if (userRepository.existsByEmail(request.getEmail().toLowerCase())) {
+            throw new ConflictException("Email is already registered");
+        }
+
+        User user = User.builder()
+                .fullName(request.getFullName())
+                .email(request.getEmail().toLowerCase())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .phone(request.getPhone())
+                .role(Role.STAFF)
+                .phoneVerified(true)
+                .build();
+        user = userRepository.save(user);
+
+        member.setLinkedUserId(user.getId());
+        member.setInviteToken(null);
+        member.setInviteTokenExpiresAt(null);
+        staffMemberRepository.save(member);
+
+        return toAuthResponse(user);
     }
 
     /**

@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 
 @RestController
@@ -30,5 +32,18 @@ public class SearchController {
     @Operation(summary = "Search salons by service category")
     public ResponseEntity<ApiResponse<List<SalonDto>>> byCategory(@PathVariable String category) {
         return ResponseEntity.ok(ApiResponse.success(searchService.byCategory(category)));
+    }
+
+    @GetMapping("/available")
+    @Operation(summary = "Find salons with an available slot at a given date+time")
+    public ResponseEntity<ApiResponse<List<SalonDto>>> available(
+            @RequestParam String date,
+            @RequestParam String time,
+            @RequestParam(defaultValue = "60") int duration) {
+        return ResponseEntity.ok(ApiResponse.success(
+                searchService.searchAvailable(
+                        LocalDate.parse(date),
+                        LocalTime.parse(time),
+                        duration)));
     }
 }

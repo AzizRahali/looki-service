@@ -32,6 +32,8 @@ public interface SalonRepository extends JpaRepository<Salon, UUID> {
 
     List<Salon> findByOwnerId(UUID ownerId);
 
+    boolean existsByOwnerId(UUID ownerId);
+
     Optional<Salon> findByIdAndOwnerId(UUID id, UUID ownerId);
 
     @org.springframework.data.jpa.repository.Modifying

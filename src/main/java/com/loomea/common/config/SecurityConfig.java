@@ -48,9 +48,13 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/auth/register").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/request-otp").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/verify-phone").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/staff/register").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/salons").permitAll()
                         // Salons & search — browse without account
                         .requestMatchers(HttpMethod.GET, "/api/salons/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/search/**").permitAll()
+                        // Service catalog — public so clients & owners can browse
+                        .requestMatchers(HttpMethod.GET, "/api/services/catalog").permitAll()
                         // Slot availability — public so guest can check before signing up
                         .requestMatchers(HttpMethod.GET, "/api/bookings/slots").permitAll()
                         // Reviews — reading is public
@@ -59,10 +63,13 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/portfolio/**").permitAll()
                         // H2 console (dev only)
                         .requestMatchers("/h2-console/**").permitAll()
+                        // Stripe webhook — public, signature verified inside service
+                        .requestMatchers(HttpMethod.POST, "/api/payments/webhook").permitAll()
                         // ── Subscriptions — authenticated SALON_OWNER only ──
                         .requestMatchers("/api/subscriptions/**").hasRole("SALON_OWNER")
                         // ── Role-restricted ────────────────────────────────
                         .requestMatchers("/api/owner/**").hasRole("SALON_OWNER")
+                        .requestMatchers("/api/staff/**").hasRole("STAFF")
                         // ── Everything else requires a valid JWT ───────────
                         .anyRequest().authenticated()
                 )

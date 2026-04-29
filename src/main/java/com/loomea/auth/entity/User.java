@@ -37,6 +37,10 @@ public class User {
 
     private String avatarUrl;
 
+    @Lob
+    @Column(name = "avatar_data")
+    private byte[] avatarData;
+
     private String location;
 
     @Builder.Default

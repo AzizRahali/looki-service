@@ -33,6 +33,8 @@ public class BookingDto {
     private int clientReliabilityScore;
     /** Client's reliability tier label — visible to salon owners. */
     private String clientReliabilityTier;
+    private String staffMemberId;
+    private String staffMemberName;
 
     @Getter
     @Builder

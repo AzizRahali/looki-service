@@ -13,7 +13,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(subscriptionInterceptor)
-                .addPathPatterns("/api/owner/**");
+        // Subscriptions removed — no gate on owner endpoints
+
     }
 }

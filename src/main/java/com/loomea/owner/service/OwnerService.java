@@ -11,23 +11,36 @@ import com.loomea.common.exception.ResourceNotFoundException;
 import com.loomea.common.reliability.ReliabilityService;
 import com.loomea.common.reliability.ReliabilityTier;
 import com.loomea.owner.dto.*;
+import com.loomea.owner.entity.JoinRequest;
+import com.loomea.owner.entity.JoinRequest.JoinRequestStatus;
+import com.loomea.owner.entity.StaffMember;
+import com.loomea.owner.entity.StaffRole;
+import com.loomea.owner.entity.StaffStatus;
+import com.loomea.owner.repository.JoinRequestRepository;
+import com.loomea.owner.repository.StaffMemberRepository;
+import com.loomea.common.exception.ConflictException;
 import com.loomea.salon.dto.CreatePortfolioPostRequest;
 import com.loomea.salon.dto.PortfolioPostDto;
 import com.loomea.salon.dto.SalonDto;
 import com.loomea.salon.dto.UpdatePortfolioPostRequest;
+import com.loomea.salon.dto.WorkingHoursDto;
 import com.loomea.salon.entity.PortfolioPost;
 import com.loomea.salon.entity.Salon;
 import com.loomea.salon.entity.SalonService;
+import com.loomea.salon.entity.WorkingHours;
 import com.loomea.salon.repository.PortfolioRepository;
 import com.loomea.salon.repository.SalonRepository;
+import com.loomea.salon.repository.WorkingHoursRepository;
 import com.loomea.salon.service.SalonServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -40,6 +53,9 @@ public class OwnerService {
     private final SalonServiceImpl salonMapper;
     private final PortfolioRepository portfolioRepository;
     private final ReliabilityService reliabilityService;
+    private final WorkingHoursRepository workingHoursRepository;
+    private final StaffMemberRepository staffMemberRepository;
+    private final JoinRequestRepository joinRequestRepository;
 
     // ──────────────── Salon CRUD ────────────────
 
@@ -356,6 +372,276 @@ public class OwnerService {
                 .build();
     }
 
+    // ──────────────── Working Hours ────────────────
+
+    @Transactional(readOnly = true)
+    public List<WorkingHoursDto> getWorkingHours(UUID salonId, UUID ownerId) {
+        findOwned(salonId, ownerId);
+        return workingHoursRepository.findBySalonIdOrderByDayOfWeek(salonId)
+                .stream().map(this::toWorkingHoursDto).toList();
+    }
+
+    @Transactional
+    public List<WorkingHoursDto> saveWorkingHours(UUID salonId, UUID ownerId, List<WorkingHoursDto> dtos) {
+        Salon salon = findOwned(salonId, ownerId);
+        workingHoursRepository.deleteBySalonId(salonId);
+        List<WorkingHours> hours = dtos.stream().map(dto -> WorkingHours.builder()
+                .salon(salon)
+                .dayOfWeek(dto.getDayOfWeek())
+                .openTime(dto.getOpenTime())
+                .closeTime(dto.getCloseTime())
+                .closed(dto.isClosed())
+                .build()).toList();
+        return workingHoursRepository.saveAll(hours).stream()
+                .sorted(java.util.Comparator.comparingInt(WorkingHours::getDayOfWeek))
+                .map(this::toWorkingHoursDto).toList();
+    }
+
+    private WorkingHoursDto toWorkingHoursDto(WorkingHours wh) {
+        return WorkingHoursDto.builder()
+                .dayOfWeek(wh.getDayOfWeek())
+                .openTime(wh.getOpenTime())
+                .closeTime(wh.getCloseTime())
+                .closed(wh.isClosed())
+                .build();
+    }
+
+    // ──────────────── Staff CRUD ────────────────
+
+    @Transactional(readOnly = true)
+    public List<StaffMemberDto> getStaff(UUID salonId, UUID ownerId) {
+        findOwned(salonId, ownerId);
+        // Return ACTIVE + SUSPENDED (owner sees everyone except fully removed)
+        return staffMemberRepository.findBySalonIdAndStatusNot(salonId, StaffStatus.REMOVED)
+                .stream().map(this::toStaffDto).toList();
+    }
+
+    @Transactional
+    public StaffMemberDto addStaff(UUID salonId, UUID ownerId, CreateStaffRequest req) {
+        Salon salon = findOwned(salonId, ownerId);
+        StaffMember member = StaffMember.builder()
+                .salon(salon)
+                .name(req.getName())
+                .role(req.getRole())
+                .build();
+        if (req.getAvatarData() != null && !req.getAvatarData().isBlank()) {
+            member.setAvatarData(Base64.getDecoder().decode(req.getAvatarData()));
+        }
+        member = staffMemberRepository.save(member);
+        return toStaffDto(member);
+    }
+
+    @Transactional
+    public StaffMemberDto updateStaff(UUID salonId, UUID staffId, UUID ownerId, UpdateStaffRequest req) {
+        findOwned(salonId, ownerId);
+        StaffMember member = staffMemberRepository.findByIdAndSalonId(staffId, salonId)
+                .orElseThrow(() -> new ResourceNotFoundException("StaffMember", "id", staffId));
+        if (req.getName() != null) member.setName(req.getName());
+        if (req.getRole() != null) member.setRole(req.getRole());
+        if (req.getAvatarData() != null && !req.getAvatarData().isBlank()) {
+            member.setAvatarData(Base64.getDecoder().decode(req.getAvatarData()));
+        }
+        return toStaffDto(staffMemberRepository.save(member));
+    }
+
+    @Transactional
+    public void deleteStaff(UUID salonId, UUID staffId, UUID ownerId) {
+        findOwned(salonId, ownerId);
+        StaffMember member = staffMemberRepository.findByIdAndSalonId(staffId, salonId)
+                .orElseThrow(() -> new ResourceNotFoundException("StaffMember", "id", staffId));
+        member.setStatus(StaffStatus.REMOVED);
+        staffMemberRepository.save(member);
+    }
+
+    @Transactional
+    public StaffMemberDto suspendStaff(UUID salonId, UUID staffId, UUID ownerId) {
+        findOwned(salonId, ownerId);
+        StaffMember member = staffMemberRepository.findByIdAndSalonId(staffId, salonId)
+                .orElseThrow(() -> new ResourceNotFoundException("StaffMember", "id", staffId));
+        if (member.getStatus() == StaffStatus.REMOVED) {
+            throw new BadRequestException("Cannot suspend a removed staff member");
+        }
+        member.setStatus(StaffStatus.SUSPENDED);
+        return toStaffDto(staffMemberRepository.save(member));
+    }
+
+    @Transactional
+    public StaffMemberDto activateStaff(UUID salonId, UUID staffId, UUID ownerId) {
+        findOwned(salonId, ownerId);
+        StaffMember member = staffMemberRepository.findByIdAndSalonId(staffId, salonId)
+                .orElseThrow(() -> new ResourceNotFoundException("StaffMember", "id", staffId));
+        if (member.getStatus() == StaffStatus.REMOVED) {
+            throw new BadRequestException("Cannot activate a removed staff member");
+        }
+        member.setStatus(StaffStatus.ACTIVE);
+        return toStaffDto(staffMemberRepository.save(member));
+    }
+
+    @Transactional
+    public StaffMemberDto assignStaffRole(UUID salonId, UUID staffId, UUID ownerId, AssignStaffRoleRequest req) {
+        findOwned(salonId, ownerId);
+        StaffMember member = staffMemberRepository.findByIdAndSalonId(staffId, salonId)
+                .orElseThrow(() -> new ResourceNotFoundException("StaffMember", "id", staffId));
+        StaffRole newRole;
+        try {
+            newRole = StaffRole.valueOf(req.getStaffRole().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException("Invalid staff role. Must be ADMIN or STAFF.");
+        }
+        member.setStaffRole(newRole);
+        return toStaffDto(staffMemberRepository.save(member));
+    }
+
+    // ──────────────── Join Requests ────────────────
+
+    @Transactional
+    public JoinRequestDto submitJoinRequest(UUID salonId, UUID userId, CreateJoinRequestRequest req) {
+        Salon salon = salonRepository.findById(salonId)
+                .orElseThrow(() -> new ResourceNotFoundException("Salon", "id", salonId));
+
+        if (joinRequestRepository.existsBySalonIdAndUserIdAndStatus(salonId, userId, JoinRequestStatus.PENDING)) {
+            throw new ConflictException("You already have a pending join request for this salon");
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+
+        JoinRequest joinRequest = JoinRequest.builder()
+                .salon(salon)
+                .userId(userId)
+                .userName(user.getFullName())
+                .userEmail(user.getEmail())
+                .message(req.getMessage())
+                .build();
+
+        return toJoinRequestDto(joinRequestRepository.save(joinRequest));
+    }
+
+    @Transactional(readOnly = true)
+    public List<JoinRequestDto> getPendingJoinRequests(UUID salonId, UUID ownerId) {
+        findOwned(salonId, ownerId);
+        return joinRequestRepository
+                .findBySalonIdAndStatusOrderByCreatedAtDesc(salonId, JoinRequestStatus.PENDING)
+                .stream().map(this::toJoinRequestDto).toList();
+    }
+
+    @Transactional
+    public StaffInviteResponse approveJoinRequest(UUID salonId, UUID requestId, UUID ownerId) {
+        findOwned(salonId, ownerId);
+        JoinRequest request = joinRequestRepository.findByIdAndSalonId(requestId, salonId)
+                .orElseThrow(() -> new ResourceNotFoundException("JoinRequest", "id", requestId));
+
+        if (request.getStatus() != JoinRequestStatus.PENDING) {
+            throw new BadRequestException("This join request has already been resolved");
+        }
+
+        // Create a staff member record for the applicant
+        Salon salon = salonRepository.findById(salonId).orElseThrow();
+        StaffMember member = StaffMember.builder()
+                .salon(salon)
+                .name(request.getUserName())
+                .build();
+
+        // Auto-generate invite token so the applicant can set up their staff account
+        String token = UUID.randomUUID().toString().replace("-", "");
+        LocalDateTime expiresAt = LocalDateTime.now().plusDays(7);
+        member.setInviteToken(token);
+        member.setInviteTokenExpiresAt(expiresAt);
+        staffMemberRepository.save(member);
+
+        request.setStatus(JoinRequestStatus.APPROVED);
+        request.setResolvedAt(java.time.Instant.now());
+        joinRequestRepository.save(request);
+
+        String deepLink = "loomea://staff/join?token=" + token;
+        return StaffInviteResponse.builder()
+                .staffId(member.getId().toString())
+                .inviteToken(token)
+                .deepLink(deepLink)
+                .expiresAt(expiresAt.toString())
+                .build();
+    }
+
+    @Transactional
+    public void rejectJoinRequest(UUID salonId, UUID requestId, UUID ownerId) {
+        findOwned(salonId, ownerId);
+        JoinRequest request = joinRequestRepository.findByIdAndSalonId(requestId, salonId)
+                .orElseThrow(() -> new ResourceNotFoundException("JoinRequest", "id", requestId));
+
+        if (request.getStatus() != JoinRequestStatus.PENDING) {
+            throw new BadRequestException("This join request has already been resolved");
+        }
+
+        request.setStatus(JoinRequestStatus.REJECTED);
+        request.setResolvedAt(java.time.Instant.now());
+        joinRequestRepository.save(request);
+    }
+
+    @Transactional
+    public StaffInviteResponse generateInvite(UUID salonId, UUID staffId, UUID ownerId) {
+        findOwned(salonId, ownerId);
+        StaffMember member = staffMemberRepository.findByIdAndSalonId(staffId, salonId)
+                .orElseThrow(() -> new ResourceNotFoundException("StaffMember", "id", staffId));
+        if (member.getLinkedUserId() != null) {
+            throw new ConflictException("This staff member has already accepted an invite");
+        }
+        String token = UUID.randomUUID().toString().replace("-", "");
+        LocalDateTime expiresAt = LocalDateTime.now().plusDays(7);
+        member.setInviteToken(token);
+        member.setInviteTokenExpiresAt(expiresAt);
+        staffMemberRepository.save(member);
+        String deepLink = "loomea://staff/join?token=" + token;
+        return StaffInviteResponse.builder()
+                .staffId(staffId.toString())
+                .inviteToken(token)
+                .deepLink(deepLink)
+                .expiresAt(expiresAt.toString())
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<byte[]> getStaffAvatarBytes(UUID staffId) {
+        return staffMemberRepository.findById(staffId)
+                .filter(m -> m.getAvatarData() != null && m.getAvatarData().length > 0)
+                .map(StaffMember::getAvatarData);
+    }
+
+    private StaffMemberDto toStaffDto(StaffMember m) {
+        String inviteStatus = "none";
+        if (m.getLinkedUserId() != null) {
+            inviteStatus = "active";
+        } else if (m.getInviteToken() != null) {
+            inviteStatus = "pending";
+        }
+        return StaffMemberDto.builder()
+                .id(m.getId().toString())
+                .salonId(m.getSalon().getId().toString())
+                .name(m.getName())
+                .role(m.getRole())
+                .staffRole(m.getStaffRole().name())
+                .status(m.getStatus().name())
+                .avatarUrl(m.getAvatarData() != null && m.getAvatarData().length > 0
+                        ? "/api/owner/staff/" + m.getId() + "/avatar"
+                        : null)
+                .inviteToken(m.getLinkedUserId() == null ? m.getInviteToken() : null)
+                .inviteStatus(inviteStatus)
+                .build();
+    }
+
+    private JoinRequestDto toJoinRequestDto(JoinRequest r) {
+        return JoinRequestDto.builder()
+                .id(r.getId().toString())
+                .salonId(r.getSalon().getId().toString())
+                .userId(r.getUserId().toString())
+                .userName(r.getUserName())
+                .userEmail(r.getUserEmail())
+                .message(r.getMessage())
+                .status(r.getStatus().name())
+                .createdAt(r.getCreatedAt() != null ? r.getCreatedAt().toString() : null)
+                .resolvedAt(r.getResolvedAt() != null ? r.getResolvedAt().toString() : null)
+                .build();
+    }
+
     // ──────────────── Helpers ────────────────
 
     private Salon findOwned(UUID salonId, UUID ownerId) {
@@ -396,6 +682,8 @@ public class OwnerService {
                 .clientName(client != null ? client.getFullName() : null)
                 .clientReliabilityScore(clientScore)
                 .clientReliabilityTier(ReliabilityTier.fromScore(clientScore).name())
+                .staffMemberId(a.getStaffMember() != null ? a.getStaffMember().getId().toString() : null)
+                .staffMemberName(a.getStaffMember() != null ? a.getStaffMember().getName() : null)
                 .services(a.getServices().stream().map(s ->
                         BookingDto.BookingServiceDto.builder()
                                 .serviceName(s.getServiceName())

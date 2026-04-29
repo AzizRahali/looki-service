@@ -26,7 +26,7 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
     // ── Client: past ──────────────────────────────────────────────────────
 
     @Query("SELECT a FROM Appointment a WHERE a.user.id = :userId " +
-            "AND (a.date < :today OR a.status IN ('COMPLETED','CANCELLED')) " +
+            "AND (a.date < :today OR a.status IN ('COMPLETED','CANCELLED','NO_SHOW')) " +
             "ORDER BY a.date DESC")
     List<Appointment> findPast(@Param("userId") UUID userId,
                                @Param("today") LocalDate today);
@@ -116,7 +116,7 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
     // ── Owner: past ───────────────────────────────────────────────────────
 
     @Query("SELECT a FROM Appointment a WHERE a.salon.id = :salonId " +
-            "AND (a.date < :today OR a.status IN ('COMPLETED','CANCELLED')) " +
+            "AND (a.date < :today OR a.status IN ('COMPLETED','CANCELLED','NO_SHOW')) " +
             "ORDER BY a.date DESC")
     List<Appointment> findPastBySalon(@Param("salonId") UUID salonId,
                                       @Param("today") LocalDate today);
@@ -134,6 +134,21 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
             "ORDER BY a.startTime ASC")
     List<Appointment> findTodayBySalon(@Param("salonId") UUID salonId,
                                        @Param("date") LocalDate date);
+
+    // ── Auto-flag: find CONFIRMED appointments whose slot has passed ──────
+
+    /**
+     * Returns all CONFIRMED appointments whose date is strictly before today,
+     * OR whose date is today and whose end time is before {@code cutoffTime}.
+     * Used by the no-show auto-flag job (grace period applied by caller).
+     * JOIN FETCH user to avoid LazyInitializationException in the scheduled task.
+     */
+    @Query("SELECT a FROM Appointment a JOIN FETCH a.user " +
+           "WHERE a.status = 'CONFIRMED' " +
+           "AND (a.date < :today OR (a.date = :today AND a.endTime < :cutoffTime))")
+    List<Appointment> findMissedConfirmedAppointments(
+            @Param("today") LocalDate today,
+            @Param("cutoffTime") LocalTime cutoffTime);
 
     // ── Dashboard: monthly appointments (for monthly revenue) ────────────
 

@@ -34,6 +34,16 @@
     booking:
       pending-timeout-minutes: 15
 
+    # Stripe payment gateway
+    stripe:
+      secret-key: "sk_test_51TQUOoGclSemIXgylgchCPmsh3uxS27oRNyDMFUZIU5E7nb1NcISLJYsepkR9HfhqpwL7VO8t01LzHfA9MlUFa5Z00gg3rKtYx"
+      # Optional: Stripe webhook endpoint secret (whsec_...).
+      # Leave blank to rely solely on Flutter polling (fine for local dev).
+      webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+      # Intercepted by the in-app WebView — don't need to resolve as real pages.
+      success-url: ${STRIPE_SUCCESS_URL:https://loomea.app/payment/success}
+      cancel-url: ${STRIPE_CANCEL_URL:https://loomea.app/payment/cancel}
+
     # Twilio (optional — uses env vars)
     twilio:
       account-sid: ${TWILIO_ACCOUNT_SID:}

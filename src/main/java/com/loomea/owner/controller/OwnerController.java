@@ -3,6 +3,10 @@ package com.loomea.owner.controller;
 import com.loomea.booking.dto.BookingDto;
 import com.loomea.common.dto.ApiResponse;
 import com.loomea.owner.dto.*;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.transaction.annotation.Transactional;
+import com.loomea.salon.dto.WorkingHoursDto;
 import com.loomea.owner.service.OwnerService;
 import com.loomea.salon.dto.CreatePortfolioPostRequest;
 import com.loomea.salon.dto.PortfolioPostDto;
@@ -219,6 +223,154 @@ public class OwnerController {
             @AuthenticationPrincipal UserDetails user) {
         ownerService.deletePortfolioPost(salonId, postId, UUID.fromString(user.getUsername()));
         return ResponseEntity.ok(ApiResponse.success("Post deleted", null));
+    }
+
+    // ──────────────── Working Hours ────────────────
+
+    @GetMapping("/salons/{salonId}/working-hours")
+    @Operation(summary = "Get working hours for my salon")
+    public ResponseEntity<ApiResponse<List<WorkingHoursDto>>> getWorkingHours(
+            @PathVariable UUID salonId, @AuthenticationPrincipal UserDetails user) {
+        return ResponseEntity.ok(ApiResponse.success(
+                ownerService.getWorkingHours(salonId, UUID.fromString(user.getUsername()))));
+    }
+
+    @PutMapping("/salons/{salonId}/working-hours")
+    @Operation(summary = "Replace working hours for my salon")
+    public ResponseEntity<ApiResponse<List<WorkingHoursDto>>> saveWorkingHours(
+            @PathVariable UUID salonId,
+            @AuthenticationPrincipal UserDetails user,
+            @RequestBody List<WorkingHoursDto> hours) {
+        return ResponseEntity.ok(ApiResponse.success("Working hours saved",
+                ownerService.saveWorkingHours(salonId, UUID.fromString(user.getUsername()), hours)));
+    }
+
+    // ──────────────── Staff ────────────────
+
+    @GetMapping("/salons/{salonId}/staff")
+    @Operation(summary = "List active staff for my salon")
+    public ResponseEntity<ApiResponse<List<StaffMemberDto>>> getStaff(
+            @PathVariable UUID salonId, @AuthenticationPrincipal UserDetails user) {
+        return ResponseEntity.ok(ApiResponse.success(
+                ownerService.getStaff(salonId, UUID.fromString(user.getUsername()))));
+    }
+
+    @PostMapping("/salons/{salonId}/staff")
+    @Operation(summary = "Add a staff member to my salon")
+    public ResponseEntity<ApiResponse<StaffMemberDto>> addStaff(
+            @PathVariable UUID salonId,
+            @AuthenticationPrincipal UserDetails user,
+            @Valid @RequestBody CreateStaffRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Staff member added",
+                        ownerService.addStaff(salonId, UUID.fromString(user.getUsername()), request)));
+    }
+
+    @PutMapping("/salons/{salonId}/staff/{staffId}")
+    @Operation(summary = "Update a staff member")
+    public ResponseEntity<ApiResponse<StaffMemberDto>> updateStaff(
+            @PathVariable UUID salonId,
+            @PathVariable UUID staffId,
+            @AuthenticationPrincipal UserDetails user,
+            @RequestBody UpdateStaffRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("Staff member updated",
+                ownerService.updateStaff(salonId, staffId, UUID.fromString(user.getUsername()), request)));
+    }
+
+    @DeleteMapping("/salons/{salonId}/staff/{staffId}")
+    @Operation(summary = "Deactivate a staff member")
+    public ResponseEntity<ApiResponse<Void>> deleteStaff(
+            @PathVariable UUID salonId,
+            @PathVariable UUID staffId,
+            @AuthenticationPrincipal UserDetails user) {
+        ownerService.deleteStaff(salonId, staffId, UUID.fromString(user.getUsername()));
+        return ResponseEntity.ok(ApiResponse.success("Staff member removed", null));
+    }
+
+    @PostMapping("/salons/{salonId}/staff/{staffId}/invite")
+    @Operation(summary = "Generate or refresh a QR invite link for a staff member")
+    public ResponseEntity<ApiResponse<StaffInviteResponse>> inviteStaff(
+            @PathVariable UUID salonId,
+            @PathVariable UUID staffId,
+            @AuthenticationPrincipal UserDetails user) {
+        return ResponseEntity.ok(ApiResponse.success("Invite generated",
+                ownerService.generateInvite(salonId, staffId, UUID.fromString(user.getUsername()))));
+    }
+
+    @PutMapping("/salons/{salonId}/staff/{staffId}/suspend")
+    @Operation(summary = "Suspend a staff member — blocks access instantly, preserves bookings")
+    public ResponseEntity<ApiResponse<StaffMemberDto>> suspendStaff(
+            @PathVariable UUID salonId,
+            @PathVariable UUID staffId,
+            @AuthenticationPrincipal UserDetails user) {
+        return ResponseEntity.ok(ApiResponse.success("Staff member suspended",
+                ownerService.suspendStaff(salonId, staffId, UUID.fromString(user.getUsername()))));
+    }
+
+    @PutMapping("/salons/{salonId}/staff/{staffId}/activate")
+    @Operation(summary = "Reactivate a suspended staff member")
+    public ResponseEntity<ApiResponse<StaffMemberDto>> activateStaff(
+            @PathVariable UUID salonId,
+            @PathVariable UUID staffId,
+            @AuthenticationPrincipal UserDetails user) {
+        return ResponseEntity.ok(ApiResponse.success("Staff member activated",
+                ownerService.activateStaff(salonId, staffId, UUID.fromString(user.getUsername()))));
+    }
+
+    @PutMapping("/salons/{salonId}/staff/{staffId}/role")
+    @Operation(summary = "Assign a salon role (ADMIN or STAFF) to a staff member")
+    public ResponseEntity<ApiResponse<StaffMemberDto>> assignStaffRole(
+            @PathVariable UUID salonId,
+            @PathVariable UUID staffId,
+            @AuthenticationPrincipal UserDetails user,
+            @Valid @RequestBody AssignStaffRoleRequest req) {
+        return ResponseEntity.ok(ApiResponse.success("Role assigned",
+                ownerService.assignStaffRole(salonId, staffId, UUID.fromString(user.getUsername()), req)));
+    }
+
+    // ──────────────── Join Requests ────────────────
+
+    @GetMapping("/salons/{salonId}/join-requests")
+    @Operation(summary = "List pending join requests for a salon")
+    public ResponseEntity<ApiResponse<List<JoinRequestDto>>> getJoinRequests(
+            @PathVariable UUID salonId,
+            @AuthenticationPrincipal UserDetails user) {
+        return ResponseEntity.ok(ApiResponse.success(
+                ownerService.getPendingJoinRequests(salonId, UUID.fromString(user.getUsername()))));
+    }
+
+    @PutMapping("/salons/{salonId}/join-requests/{requestId}/approve")
+    @Operation(summary = "Approve a join request — creates a staff member and returns an invite link")
+    public ResponseEntity<ApiResponse<StaffInviteResponse>> approveJoinRequest(
+            @PathVariable UUID salonId,
+            @PathVariable UUID requestId,
+            @AuthenticationPrincipal UserDetails user) {
+        return ResponseEntity.ok(ApiResponse.success("Request approved — invite link generated",
+                ownerService.approveJoinRequest(salonId, requestId, UUID.fromString(user.getUsername()))));
+    }
+
+    @PutMapping("/salons/{salonId}/join-requests/{requestId}/reject")
+    @Operation(summary = "Reject a join request")
+    public ResponseEntity<ApiResponse<Void>> rejectJoinRequest(
+            @PathVariable UUID salonId,
+            @PathVariable UUID requestId,
+            @AuthenticationPrincipal UserDetails user) {
+        ownerService.rejectJoinRequest(salonId, requestId, UUID.fromString(user.getUsername()));
+        return ResponseEntity.ok(ApiResponse.success("Request rejected", null));
+    }
+
+    @GetMapping("/staff/{staffId}/avatar")
+    @Operation(summary = "Get staff member avatar image")
+    @Transactional(readOnly = true)
+    public ResponseEntity<byte[]> getStaffAvatar(
+            @PathVariable UUID staffId,
+            @AuthenticationPrincipal UserDetails user) {
+        return ownerService.getStaffAvatarBytes(staffId)
+                .map(bytes -> ResponseEntity.ok()
+                        .contentType(MediaType.IMAGE_JPEG)
+                        .header(HttpHeaders.CACHE_CONTROL, "public, max-age=86400")
+                        .body(bytes))
+                .orElse(ResponseEntity.notFound().build());
     }
 
     // ──────────────── Dashboard ────────────────

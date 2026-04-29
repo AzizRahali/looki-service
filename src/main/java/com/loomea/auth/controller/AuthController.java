@@ -8,7 +8,9 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -72,6 +74,29 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("Profile updated", authService.updateProfile(userId, request)));
     }
 
+    @PutMapping("/me/avatar")
+    @Operation(summary = "Upload avatar image (base64)", security = @SecurityRequirement(name = "Bearer JWT"))
+    public ResponseEntity<ApiResponse<AuthResponse.UserDto>> uploadAvatar(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestBody java.util.Map<String, String> body) {
+        requireAuth(userDetails);
+        UUID userId = UUID.fromString(userDetails.getUsername());
+        return ResponseEntity.ok(ApiResponse.success("Avatar updated",
+                authService.uploadAvatar(userId, body.get("imageData"))));
+    }
+
+    @GetMapping("/users/{userId}/avatar")
+    @Operation(summary = "Serve user avatar image (public)")
+    public ResponseEntity<byte[]> getAvatar(@PathVariable UUID userId) {
+        byte[] data = authService.getAvatarData(userId);
+        if (data == null || data.length == 0) {
+            return ResponseEntity.notFound().build();
+        }
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.IMAGE_JPEG);
+        return ResponseEntity.ok().headers(headers).body(data);
+    }
+
     @PostMapping("/me/saved-salons/{salonId}")
     @Operation(summary = "Save a salon to favourites", security = @SecurityRequirement(name = "Bearer JWT"))
     public ResponseEntity<ApiResponse<AuthResponse.UserDto>> saveSalon(
@@ -110,6 +135,14 @@ public class AuthController {
         UUID userId = UUID.fromString(userDetails.getUsername());
         return ResponseEntity.ok(ApiResponse.success(
                 "Account deletion cancelled.", authService.cancelDeletion(userId)));
+    }
+
+    @PostMapping("/staff/register")
+    @Operation(summary = "Register a staff member account using an invite token")
+    public ResponseEntity<ApiResponse<AuthResponse>> registerStaff(
+            @Valid @RequestBody StaffRegisterRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Staff account created", authService.registerStaff(request)));
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────

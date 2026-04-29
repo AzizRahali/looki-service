@@ -11,7 +11,11 @@ import com.loomea.common.reliability.ReliabilityService;
 import com.loomea.common.reliability.ReliabilityTier;
 import com.loomea.salon.entity.Salon;
 import com.loomea.salon.entity.SalonService;
+import com.loomea.salon.entity.WorkingHours;
+import com.loomea.owner.entity.StaffMember;
+import com.loomea.owner.repository.StaffMemberRepository;
 import com.loomea.salon.repository.SalonRepository;
+import com.loomea.salon.repository.WorkingHoursRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -39,6 +43,9 @@ public class BookingService {
     private final SalonRepository salonRepository;
     private final UserRepository userRepository;
     private final ReliabilityService reliabilityService;
+    private final WorkingHoursRepository workingHoursRepository;
+    private final com.loomea.booking.repository.WaitlistRepository waitlistRepository;
+    private final StaffMemberRepository staffMemberRepository;
 
     /**
      * Atomic booking creation.
@@ -106,12 +113,22 @@ public class BookingService {
 
         boolean needsConfirmation = reliabilityService.requiresConfirmation(user);
 
+        StaffMember staffMember = null;
+        if (req.getStaffMemberId() != null && !req.getStaffMemberId().isBlank()) {
+            staffMember = staffMemberRepository.findByIdAndSalonId(
+                    UUID.fromString(req.getStaffMemberId()), salon.getId()).orElse(null);
+            if (staffMember != null && !staffMember.isActive()) {
+                throw new BadRequestException("Selected staff member is not currently available");
+            }
+        }
+
         Appointment appt = Appointment.builder()
                 .user(user).salon(salon)
                 .date(req.getDate()).startTime(req.getStartTime()).endTime(endTime)
                 .paymentMethod(paymentMethod).notes(req.getNotes())
                 .totalPrice(totalPrice)
                 .requiresClientConfirmation(needsConfirmation)
+                .staffMember(staffMember)
                 .build();
 
         for (SalonService svc : selected) {
@@ -169,7 +186,17 @@ public class BookingService {
         // ─────────────────────────────────────────────────────────────────────
 
         appt.setStatus(AppointmentStatus.CANCELLED);
-        return toDto(appointmentRepository.save(appt));
+        BookingDto result = toDto(appointmentRepository.save(appt));
+
+        // Notify first waiting user for this salon+date
+        List<WaitlistEntry> waiting = waitlistRepository
+                .findBySalonIdAndDateAndStatusOrderByCreatedAtAsc(
+                        appt.getSalon().getId(), appt.getDate(), WaitlistStatus.WAITING);
+        if (!waiting.isEmpty()) {
+            waiting.get(0).setStatus(WaitlistStatus.NOTIFIED);
+            waitlistRepository.save(waiting.get(0));
+        }
+        return result;
     }
 
     /** Client explicitly confirms they will attend (required for risky-tier users). */
@@ -225,11 +252,27 @@ public class BookingService {
      */
     @Transactional(readOnly = true)
     public List<TimeSlotDto> getSlots(UUID salonId, LocalDate date, int durationMinutes) {
+        // Resolve open/close from working hours; fall back to defaults if not configured.
+        int dayIdx = date.getDayOfWeek().getValue() - 1; // 0=Mon, 6=Sun
+        LocalTime open = OPEN;
+        LocalTime close = CLOSE;
+        List<WorkingHours> schedule = workingHoursRepository.findBySalonIdOrderByDayOfWeek(salonId);
+        if (!schedule.isEmpty()) {
+            java.util.Optional<WorkingHours> dayHours = schedule.stream()
+                    .filter(h -> h.getDayOfWeek() == dayIdx).findFirst();
+            if (dayHours.isPresent()) {
+                WorkingHours h = dayHours.get();
+                if (h.isClosed()) return List.of();
+                if (h.getOpenTime() != null)  open  = h.getOpenTime();
+                if (h.getCloseTime() != null) close = h.getCloseTime();
+            }
+        }
+
         List<Appointment> active = appointmentRepository.findActiveBySalonAndDate(salonId, date);
         List<TimeSlotDto> slots = new ArrayList<>();
-        LocalTime current = OPEN;
+        LocalTime current = open;
 
-        while (!current.plusMinutes(durationMinutes).isAfter(CLOSE)) {
+        while (!current.plusMinutes(durationMinutes).isAfter(close)) {
             final LocalTime slotStart = current;
             LocalTime slotEnd = current.plusMinutes(durationMinutes);
 
@@ -278,6 +321,8 @@ public class BookingService {
                 .requiresClientConfirmation(a.isRequiresClientConfirmation())
                 .clientConfirmedAt(a.getClientConfirmedAt() != null
                         ? a.getClientConfirmedAt().toString() : null)
+                .staffMemberId(a.getStaffMember() != null ? a.getStaffMember().getId().toString() : null)
+                .staffMemberName(a.getStaffMember() != null ? a.getStaffMember().getName() : null)
                 .services(a.getServices().stream()
                         .map(s -> BookingDto.BookingServiceDto.builder()
                                 .serviceName(s.getServiceName())

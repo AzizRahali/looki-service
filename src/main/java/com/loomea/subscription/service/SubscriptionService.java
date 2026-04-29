@@ -32,9 +32,8 @@ public class SubscriptionService {
     @Transactional
     public SubscriptionDto subscribe(UUID userId, SubscriptionRequest req) {
         if (req.getPlan() == null) {
-            throw new BadRequestException( "Subscription plan is required");
+            throw new BadRequestException("Subscription plan is required");
         }
-        validateCardDetails(req);
 
         // Cancel any existing active subscription before creating a new one
         subscriptionRepository.findByUserIdAndStatus(userId, SubscriptionStatus.ACTIVE)
@@ -44,8 +43,6 @@ public class SubscriptionService {
                 });
 
         SubscriptionPlan plan = req.getPlan();
-        String last4 = extractLast4(req.getCardNumber());
-        String payRef = "PAY-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
 
         Subscription sub = Subscription.builder()
                 .userId(userId)
@@ -53,8 +50,6 @@ public class SubscriptionService {
                 .status(SubscriptionStatus.ACTIVE)
                 .startDate(Instant.now())
                 .endDate(Instant.now().plus(plan.getDurationDays(), ChronoUnit.DAYS))
-                .paymentReference(payRef)
-                .cardLast4(last4)
                 .build();
 
         return toDto(subscriptionRepository.save(sub));
@@ -82,24 +77,6 @@ public class SubscriptionService {
 
     // ── Internals ─────────────────────────────────────────────────────────────
 
-    private void validateCardDetails(SubscriptionRequest req) {
-        if (req.getCardNumber() == null || req.getCardNumber().replaceAll("\\s", "").length() < 12) {
-            throw new BadRequestException( "Invalid card number");
-        }
-        if (req.getCardExpiry() == null || !req.getCardExpiry().matches("\\d{2}/\\d{2}")) {
-            throw new BadRequestException( "Invalid card expiry (MM/YY)");
-        }
-        if (req.getCardCvv() == null || req.getCardCvv().length() < 3) {
-            throw new BadRequestException( "Invalid CVV");
-        }
-    }
-
-    private String extractLast4(String cardNumber) {
-        if (cardNumber == null) return "0000";
-        String digits = cardNumber.replaceAll("\\D", "");
-        return digits.length() >= 4 ? digits.substring(digits.length() - 4) : "0000";
-    }
-
     public SubscriptionDto toDto(Subscription sub) {
         return SubscriptionDto.builder()
                 .id(sub.getId().toString())
@@ -110,8 +87,6 @@ public class SubscriptionService {
                 .status(sub.getStatus().name())
                 .startDate(sub.getStartDate().toString())
                 .endDate(sub.getEndDate().toString())
-                .paymentReference(sub.getPaymentReference())
-                .cardLast4(sub.getCardLast4())
                 .build();
     }
 }
