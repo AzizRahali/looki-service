@@ -54,11 +54,13 @@ public class WaitlistService {
         waitlistRepository.delete(entry);
     }
 
+    @Transactional(readOnly = true)
     public List<WaitlistDto> getMyWaiting(UUID userId) {
         return waitlistRepository.findByUserIdAndStatus(userId, WaitlistStatus.WAITING)
                 .stream().map(this::toDto).collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public List<WaitlistDto> getMyAll(UUID userId) {
         List<WaitlistEntry> waiting  = waitlistRepository.findByUserIdAndStatus(userId, WaitlistStatus.WAITING);
         List<WaitlistEntry> notified = waitlistRepository.findByUserIdAndStatus(userId, WaitlistStatus.NOTIFIED);

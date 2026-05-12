@@ -41,10 +41,10 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
             @Param("salonId") UUID salonId,
             @Param("date") LocalDate date);
 
-    // ── Atomic conflict COUNT — used for insert guard (no entity loading) ──
+    // ── Atomic conflict COUNT — only CONFIRMED blocks new requests ────────
 
     @Query("SELECT COUNT(a) FROM Appointment a WHERE a.salon.id = :salonId " +
-            "AND a.date = :date AND a.status IN ('PENDING', 'CONFIRMED') " +
+            "AND a.date = :date AND a.status = 'CONFIRMED' " +
             "AND a.startTime < :endTime AND a.endTime > :startTime")
     long countConflicts(
             @Param("salonId") UUID salonId,
@@ -52,10 +52,10 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
             @Param("startTime") LocalTime startTime,
             @Param("endTime") LocalTime endTime);
 
-    // ── Slot-conflict check: PENDING + CONFIRMED block slots (FCFS) ──────
+    // ── Slot-conflict check: only CONFIRMED blocks slots ─────────────────
 
     @Query("SELECT a FROM Appointment a WHERE a.salon.id = :salonId " +
-            "AND a.date = :date AND a.status IN ('PENDING', 'CONFIRMED') " +
+            "AND a.date = :date AND a.status = 'CONFIRMED' " +
             "AND a.startTime < :endTime AND a.endTime > :startTime")
     List<Appointment> findConflicts(
             @Param("salonId") UUID salonId,
@@ -63,15 +63,27 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
             @Param("startTime") LocalTime startTime,
             @Param("endTime") LocalTime endTime);
 
-    // ── Slot display: PENDING + CONFIRMED + COMPLETED block slots ────────
-    // COMPLETED is included so finishing an appointment doesn't re-open
-    // the slot visually on the same day in the client app.
+    // ── Slot display: CONFIRMED + COMPLETED block slots ───────────────────
+    // PENDING appointments are requests only; they don't block the slot display.
 
     @Query("SELECT a FROM Appointment a WHERE a.salon.id = :salonId " +
-            "AND a.date = :date AND a.status IN ('PENDING', 'CONFIRMED', 'COMPLETED')")
+            "AND a.date = :date AND a.status IN ('CONFIRMED', 'COMPLETED')")
     List<Appointment> findActiveBySalonAndDate(
             @Param("salonId") UUID salonId,
             @Param("date") LocalDate date);
+
+    // ── Auto-cancel: PENDING appointments overlapping a confirmed slot ────
+
+    @Query("SELECT a FROM Appointment a WHERE a.salon.id = :salonId " +
+            "AND a.date = :date AND a.status = 'PENDING' " +
+            "AND a.startTime < :endTime AND a.endTime > :startTime " +
+            "AND a.id != :excludeId")
+    List<Appointment> findConflictingPending(
+            @Param("salonId") UUID salonId,
+            @Param("date") LocalDate date,
+            @Param("startTime") LocalTime startTime,
+            @Param("endTime") LocalTime endTime,
+            @Param("excludeId") UUID excludeId);
 
     // ── Expiration: expire stale PENDING bookings ─────────────────────────
 

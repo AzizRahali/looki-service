@@ -185,16 +185,19 @@ public class BookingService {
         }
         // ─────────────────────────────────────────────────────────────────────
 
+        boolean wasConfirmed = appt.getStatus() == AppointmentStatus.CONFIRMED;
         appt.setStatus(AppointmentStatus.CANCELLED);
         BookingDto result = toDto(appointmentRepository.save(appt));
 
-        // Notify first waiting user for this salon+date
-        List<WaitlistEntry> waiting = waitlistRepository
-                .findBySalonIdAndDateAndStatusOrderByCreatedAtAsc(
-                        appt.getSalon().getId(), appt.getDate(), WaitlistStatus.WAITING);
-        if (!waiting.isEmpty()) {
-            waiting.get(0).setStatus(WaitlistStatus.NOTIFIED);
-            waitlistRepository.save(waiting.get(0));
+        // Only notify waitlist when a CONFIRMED slot is freed — PENDING never blocked the slot
+        if (wasConfirmed) {
+            List<WaitlistEntry> waiting = waitlistRepository
+                    .findBySalonIdAndDateAndStatusOrderByCreatedAtAsc(
+                            appt.getSalon().getId(), appt.getDate(), WaitlistStatus.WAITING);
+            if (!waiting.isEmpty()) {
+                waiting.get(0).setStatus(WaitlistStatus.NOTIFIED);
+                waitlistRepository.save(waiting.get(0));
+            }
         }
         return result;
     }

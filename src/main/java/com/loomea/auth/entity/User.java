@@ -37,8 +37,7 @@ public class User {
 
     private String avatarUrl;
 
-    @Lob
-    @Column(name = "avatar_data")
+    @Column(name = "avatar_data", columnDefinition = "bytea")
     private byte[] avatarData;
 
     private String location;

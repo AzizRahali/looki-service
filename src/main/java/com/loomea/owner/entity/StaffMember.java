@@ -30,8 +30,7 @@ public class StaffMember {
     /** Job title / specialisation (e.g. "Hairdresser"). Distinct from staffRole. */
     private String role;
 
-    @Lob
-    @Column(name = "avatar_data")
+    @Column(name = "avatar_data", columnDefinition = "bytea")
     private byte[] avatarData;
 
     /** Lifecycle status — replaces the old boolean `active` field. */

@@ -5,7 +5,10 @@ import com.loomea.auth.repository.UserRepository;
 import com.loomea.booking.dto.BookingDto;
 import com.loomea.booking.entity.Appointment;
 import com.loomea.booking.entity.AppointmentStatus;
+import com.loomea.booking.entity.WaitlistEntry;
+import com.loomea.booking.entity.WaitlistStatus;
 import com.loomea.booking.repository.AppointmentRepository;
+import com.loomea.booking.repository.WaitlistRepository;
 import com.loomea.common.exception.BadRequestException;
 import com.loomea.common.exception.ResourceNotFoundException;
 import com.loomea.common.reliability.ReliabilityService;
@@ -49,6 +52,7 @@ public class OwnerService {
 
     private final SalonRepository salonRepository;
     private final AppointmentRepository appointmentRepository;
+    private final WaitlistRepository waitlistRepository;
     private final UserRepository userRepository;
     private final SalonServiceImpl salonMapper;
     private final PortfolioRepository portfolioRepository;
@@ -213,7 +217,20 @@ public class OwnerService {
         }
 
         appt.setStatus(AppointmentStatus.CONFIRMED);
-        return toBookingDto(appointmentRepository.save(appt));
+        BookingDto result = toBookingDto(appointmentRepository.save(appt));
+
+        // Auto-cancel all other PENDING requests that overlap this now-confirmed slot
+        List<Appointment> conflicting = appointmentRepository.findConflictingPending(
+                appt.getSalon().getId(), appt.getDate(),
+                appt.getStartTime(), appt.getEndTime(), appt.getId());
+        for (Appointment conflict : conflicting) {
+            conflict.setStatus(AppointmentStatus.CANCELLED);
+        }
+        if (!conflicting.isEmpty()) {
+            appointmentRepository.saveAll(conflicting);
+        }
+
+        return result;
     }
 
     @Transactional
@@ -266,8 +283,14 @@ public class OwnerService {
                 && appt.getStatus() != AppointmentStatus.PENDING) {
             throw new BadRequestException("Only PENDING or CONFIRMED bookings can be rejected");
         }
+        boolean wasConfirmed = appt.getStatus() == AppointmentStatus.CONFIRMED;
         appt.setStatus(AppointmentStatus.CANCELLED);
-        return toBookingDto(appointmentRepository.save(appt));
+        BookingDto result = toBookingDto(appointmentRepository.save(appt));
+        // Only notify waitlist when a CONFIRMED slot is freed — PENDING never blocked it
+        if (wasConfirmed) {
+            notifyFirstWaiting(appt.getSalon().getId(), appt.getDate());
+        }
+        return result;
     }
 
     // ──────────────── Portfolio ────────────────
@@ -642,6 +665,15 @@ public class OwnerService {
                 .build();
     }
 
+    private void notifyFirstWaiting(UUID salonId, java.time.LocalDate date) {
+        List<WaitlistEntry> waiting = waitlistRepository
+                .findBySalonIdAndDateAndStatusOrderByCreatedAtAsc(salonId, date, WaitlistStatus.WAITING);
+        if (!waiting.isEmpty()) {
+            waiting.get(0).setStatus(WaitlistStatus.NOTIFIED);
+            waitlistRepository.save(waiting.get(0));
+        }
+    }
+
     // ──────────────── Helpers ────────────────
 
     private Salon findOwned(UUID salonId, UUID ownerId) {
@@ -680,6 +712,7 @@ public class OwnerService {
                         ? a.getClientConfirmedAt().toString() : null)
                 .clientId(client != null ? client.getId().toString() : null)
                 .clientName(client != null ? client.getFullName() : null)
+                .clientAvatarUrl(client != null ? client.getAvatarUrl() : null)
                 .clientReliabilityScore(clientScore)
                 .clientReliabilityTier(ReliabilityTier.fromScore(clientScore).name())
                 .staffMemberId(a.getStaffMember() != null ? a.getStaffMember().getId().toString() : null)

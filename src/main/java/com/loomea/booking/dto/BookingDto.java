@@ -24,6 +24,7 @@ public class BookingDto {
     private double totalPrice;
     private String clientId;
     private String clientName;
+    private String clientAvatarUrl;
     private List<BookingServiceDto> services;
     /** Set for risky-tier users — they must confirm attendance. */
     private boolean requiresClientConfirmation;
