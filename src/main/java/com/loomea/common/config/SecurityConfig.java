@@ -49,6 +49,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/auth/request-otp").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/verify-phone").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/staff/register").permitAll()
+                        // Password reset — must be public (user has no token yet)
+                        .requestMatchers(HttpMethod.POST, "/api/auth/forgot-password").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/verify-recovery-otp").permitAll()
+                        .requestMatchers(HttpMethod.GET,  "/api/auth/validate-reset-token").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/reset-password").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/salons").permitAll()
                         // Salons & search — browse without account
                         .requestMatchers(HttpMethod.GET, "/api/salons/**").permitAll()

@@ -13,6 +13,7 @@ import java.util.UUID;
 public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByEmail(String email);
     boolean existsByEmail(String email);
+    Optional<User> findByPhone(String phone);
 
     /** Returns all users who could still benefit from passive score recovery. */
     @Query("SELECT u FROM User u WHERE u.reliabilityScore < :maxScore")
