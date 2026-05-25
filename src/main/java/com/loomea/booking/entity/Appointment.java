@@ -1,7 +1,6 @@
 package com.loomea.booking.entity;
 
 import com.loomea.auth.entity.User;
-import com.loomea.owner.entity.StaffMember;
 import com.loomea.salon.entity.Salon;
 import jakarta.persistence.*;
 import lombok.*;
@@ -89,10 +88,6 @@ public class Appointment {
      * {@code null} means not yet confirmed.
      */
     private Instant clientConfirmedAt;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "staff_member_id")
-    private StaffMember staffMember;
 
     public void addService(AppointmentService service) {
         services.add(service);

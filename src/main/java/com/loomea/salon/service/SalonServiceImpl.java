@@ -66,7 +66,7 @@ public class SalonServiceImpl {
                 .phone(salon.getPhone())
                 .imageUrl(salon.getImageData() != null && salon.getImageData().length > 0
                         ? "/api/salons/" + salon.getId() + "/image"
-                        : salon.getImageUrl())
+                        : null)
                 .latitude(salon.getLatitude())
                 .longitude(salon.getLongitude())
                 .rating(salon.getRating())

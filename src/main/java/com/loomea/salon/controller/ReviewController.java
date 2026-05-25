@@ -118,7 +118,9 @@ public class ReviewController {
                 .salonId(r.getSalon().getId().toString())
                 .userId(r.getUser().getId().toString())
                 .userName(r.getUser().getFullName())
-                .userAvatar(r.getUser().getAvatarUrl())
+                .userAvatar(r.getUser().getAvatarData() != null && r.getUser().getAvatarData().length > 0
+                        ? "/api/auth/users/" + r.getUser().getId() + "/avatar"
+                        : null)
                 .rating(r.getRating())
                 .comment(r.getComment())
                 .createdAt(r.getCreatedAt() != null ? r.getCreatedAt().toString() : "")

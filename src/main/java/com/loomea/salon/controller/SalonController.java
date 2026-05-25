@@ -1,8 +1,6 @@
 package com.loomea.salon.controller;
 
 import com.loomea.common.dto.ApiResponse;
-import com.loomea.owner.dto.StaffMemberDto;
-import com.loomea.owner.repository.StaffMemberRepository;
 import com.loomea.salon.dto.PortfolioPostDto;
 import com.loomea.salon.dto.SalonDto;
 import com.loomea.salon.entity.Salon;
@@ -30,7 +28,6 @@ public class SalonController {
     private final SalonServiceImpl salonService;
     private final PortfolioRepository portfolioRepository;
     private final SalonRepository salonRepository;
-    private final StaffMemberRepository staffMemberRepository;
 
     @GetMapping
     @Operation(summary = "List all salons")
@@ -95,23 +92,4 @@ public class SalonController {
         return ResponseEntity.ok(ApiResponse.success(posts));
     }
 
-    @GetMapping("/{salonId}/staff")
-    @Operation(summary = "Get active staff members for a salon (public)")
-    @Transactional(readOnly = true)
-    public ResponseEntity<ApiResponse<List<StaffMemberDto>>> getStaff(@PathVariable UUID salonId) {
-        List<StaffMemberDto> staff = staffMemberRepository.findBySalonIdAndStatus(salonId, com.loomea.owner.entity.StaffStatus.ACTIVE)
-                .stream().map(m -> StaffMemberDto.builder()
-                        .id(m.getId().toString())
-                        .salonId(salonId.toString())
-                        .name(m.getName())
-                        .role(m.getRole())
-                        .staffRole(m.getStaffRole().name())
-                        .status(m.getStatus().name())
-                        .avatarUrl(m.getAvatarData() != null && m.getAvatarData().length > 0
-                                ? "/api/owner/staff/" + m.getId() + "/avatar"
-                                : null)
-                        .build())
-                .toList();
-        return ResponseEntity.ok(ApiResponse.success(staff));
-    }
 }

@@ -28,31 +28,40 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
-    @Operation(summary = "Register a new user (returns pending — no JWT until phone verified)")
+    @Operation(summary = "Register a new user (returns pending — no JWT until email verified)")
     public ResponseEntity<ApiResponse<AuthResponse.PendingResponse>> register(
             @Valid @RequestBody RegisterRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Account created. Please verify your phone.", authService.register(request)));
+                .body(ApiResponse.success("Account created. Please verify your email.", authService.register(request)));
     }
 
     @PostMapping("/request-otp")
-    @Operation(summary = "Request phone verification OTP")
+    @Operation(summary = "Resend email verification OTP")
     public ResponseEntity<ApiResponse<String>> requestOtp(@Valid @RequestBody RequestOtpRequest request) {
         authService.requestOtp(request);
         return ResponseEntity.ok(ApiResponse.<String>builder()
-                .success(true).message("OTP sent to your phone.").build());
+                .success(true).message("OTP sent to your email.").build());
     }
 
-    @PostMapping("/verify-phone")
-    @Operation(summary = "Verify phone with OTP — returns JWT on success")
-    public ResponseEntity<ApiResponse<AuthResponse>> verifyPhone(@Valid @RequestBody VerifyPhoneRequest request) {
-        return ResponseEntity.ok(ApiResponse.success("Phone verified successfully", authService.verifyPhone(request)));
+    @PostMapping("/verify-email")
+    @Operation(summary = "Verify email with OTP — returns JWT on success")
+    public ResponseEntity<ApiResponse<AuthResponse>> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("Email verified successfully", authService.verifyEmail(request)));
     }
 
     @PostMapping("/login")
     @Operation(summary = "Login and receive JWT")
-    public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
-        return ResponseEntity.ok(ApiResponse.success("Login successful", authService.login(request)));
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
+        AuthResponse result = authService.login(request);
+        if (result == null) {
+            AuthResponse.PendingResponse pending = AuthResponse.PendingResponse.builder()
+                    .email(request.getEmail().toLowerCase())
+                    .role("")
+                    .message("Email not verified. A new verification code has been sent.")
+                    .build();
+            return ResponseEntity.ok(ApiResponse.success("Email not verified", pending));
+        }
+        return ResponseEntity.ok(ApiResponse.success("Login successful", result));
     }
 
     @GetMapping("/me")
@@ -135,14 +144,6 @@ public class AuthController {
         UUID userId = UUID.fromString(userDetails.getUsername());
         return ResponseEntity.ok(ApiResponse.success(
                 "Account deletion cancelled.", authService.cancelDeletion(userId)));
-    }
-
-    @PostMapping("/staff/register")
-    @Operation(summary = "Register a staff member account using an invite token")
-    public ResponseEntity<ApiResponse<AuthResponse>> registerStaff(
-            @Valid @RequestBody StaffRegisterRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Staff account created", authService.registerStaff(request)));
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────

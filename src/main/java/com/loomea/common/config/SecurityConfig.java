@@ -47,8 +47,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/register").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/request-otp").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/verify-phone").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/staff/register").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/verify-email").permitAll()
                         // Password reset — must be public (user has no token yet)
                         .requestMatchers(HttpMethod.POST, "/api/auth/forgot-password").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/verify-recovery-otp").permitAll()
@@ -74,7 +73,6 @@ public class SecurityConfig {
                         .requestMatchers("/api/subscriptions/**").hasRole("SALON_OWNER")
                         // ── Role-restricted ────────────────────────────────
                         .requestMatchers("/api/owner/**").hasRole("SALON_OWNER")
-                        .requestMatchers("/api/staff/**").hasRole("STAFF")
                         // ── Everything else requires a valid JWT ───────────
                         .anyRequest().authenticated()
                 )

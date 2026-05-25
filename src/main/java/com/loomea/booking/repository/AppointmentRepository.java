@@ -17,7 +17,7 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
 
     // ── Client: upcoming = PENDING or CONFIRMED, future dates ────────────
 
-    @Query("SELECT a FROM Appointment a WHERE a.user.id = :userId " +
+    @Query("SELECT a FROM Appointment a JOIN FETCH a.salon WHERE a.user.id = :userId " +
             "AND a.date >= :today AND a.status IN ('PENDING', 'CONFIRMED') " +
             "ORDER BY a.date ASC, a.startTime ASC")
     List<Appointment> findUpcoming(@Param("userId") UUID userId,
@@ -25,7 +25,7 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
 
     // ── Client: past ──────────────────────────────────────────────────────
 
-    @Query("SELECT a FROM Appointment a WHERE a.user.id = :userId " +
+    @Query("SELECT a FROM Appointment a JOIN FETCH a.salon WHERE a.user.id = :userId " +
             "AND (a.date < :today OR a.status IN ('COMPLETED','CANCELLED','NO_SHOW')) " +
             "ORDER BY a.date DESC")
     List<Appointment> findPast(@Param("userId") UUID userId,
@@ -119,7 +119,7 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
 
     // ── Owner: upcoming = PENDING or CONFIRMED ────────────────────────────
 
-    @Query("SELECT a FROM Appointment a WHERE a.salon.id = :salonId " +
+    @Query("SELECT a FROM Appointment a JOIN FETCH a.user WHERE a.salon.id = :salonId " +
             "AND a.date >= :today AND a.status IN ('PENDING', 'CONFIRMED') " +
             "ORDER BY a.date ASC, a.startTime ASC")
     List<Appointment> findUpcomingBySalon(@Param("salonId") UUID salonId,
@@ -127,7 +127,7 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
 
     // ── Owner: past ───────────────────────────────────────────────────────
 
-    @Query("SELECT a FROM Appointment a WHERE a.salon.id = :salonId " +
+    @Query("SELECT a FROM Appointment a JOIN FETCH a.user WHERE a.salon.id = :salonId " +
             "AND (a.date < :today OR a.status IN ('COMPLETED','CANCELLED','NO_SHOW')) " +
             "ORDER BY a.date DESC")
     List<Appointment> findPastBySalon(@Param("salonId") UUID salonId,
@@ -135,7 +135,7 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
 
     // ── Owner: all ────────────────────────────────────────────────────────
 
-    @Query("SELECT a FROM Appointment a WHERE a.salon.id = :salonId " +
+    @Query("SELECT a FROM Appointment a JOIN FETCH a.user WHERE a.salon.id = :salonId " +
             "ORDER BY a.date DESC, a.startTime DESC")
     List<Appointment> findAllBySalonId(@Param("salonId") UUID salonId);
 

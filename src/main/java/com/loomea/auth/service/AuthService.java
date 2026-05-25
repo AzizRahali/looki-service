@@ -8,11 +8,9 @@ import com.loomea.booking.repository.AppointmentRepository;
 import com.loomea.common.exception.BadRequestException;
 import com.loomea.common.exception.ConflictException;
 import com.loomea.common.exception.ResourceNotFoundException;
-import com.loomea.owner.entity.StaffMember;
-import com.loomea.owner.repository.StaffMemberRepository;
 import com.loomea.common.reliability.ReliabilityTier;
 import com.loomea.common.security.JwtProvider;
-import com.loomea.common.sms.SmsService;
+import com.loomea.common.email.EmailService;
 import com.loomea.salon.repository.ReviewRepository;
 import com.loomea.salon.repository.SalonRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +22,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Random;
@@ -40,13 +37,12 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtProvider jwtProvider;
     private final AuthenticationManager authenticationManager;
-    private final SmsService smsService;
+    private final EmailService emailService;
     private final AppointmentRepository appointmentRepository;
     private final ReviewRepository reviewRepository;
     private final SalonRepository salonRepository;
-    private final StaffMemberRepository staffMemberRepository;
 
-    /** Step 1: create account (unverified). Returns pending response — no JWT yet. */
+    /** Step 1: create account (unverified). Sends OTP email automatically. */
     @Transactional
     public AuthResponse.PendingResponse register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail().toLowerCase())) {
@@ -56,48 +52,52 @@ public class AuthService {
         if (request.getRole() != null && request.getRole().equalsIgnoreCase("SALON_OWNER")) {
             role = Role.SALON_OWNER;
         }
-        userRepository.save(User.builder()
+        String email = request.getEmail().toLowerCase();
+
+        String otp = String.format("%06d", new Random().nextInt(1_000_000));
+        User user = User.builder()
                 .fullName(request.getFullName())
-                .email(request.getEmail().toLowerCase())
+                .email(email)
                 .password(passwordEncoder.encode(request.getPassword()))
                 .phone(request.getPhone())
                 .role(role)
                 .phoneVerified(false)
-                .build());
+                .otpCode(passwordEncoder.encode(otp))
+                .otpExpiresAt(Instant.now().plusSeconds(600))
+                .build();
+        userRepository.save(user);
+
+        emailService.sendOtp(email, request.getFullName(), otp);
+
         return AuthResponse.PendingResponse.builder()
-                .email(request.getEmail().toLowerCase())
+                .email(email)
                 .role(role.name())
-                .message("Account created. Please verify your phone number.")
+                .message("Account created. Please verify your email.")
                 .build();
     }
 
-    /** Step 2: generate + log OTP, store hashed on user. */
+    /** Step 2: resend OTP to the user's email. */
     @Transactional
     public void requestOtp(RequestOtpRequest request) {
         User user = userRepository.findByEmail(request.getEmail().toLowerCase())
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", request.getEmail()));
         if (user.isPhoneVerified()) {
-            throw new BadRequestException("Phone already verified");
+            throw new BadRequestException("Email already verified");
         }
-        // Update phone number
-        user.setPhone(request.getPhone());
-        // Generate 4-digit OTP
-        String otp = String.format("%04d", new Random().nextInt(10000));
+        String otp = String.format("%06d", new Random().nextInt(1_000_000));
         user.setOtpCode(passwordEncoder.encode(otp));
-        user.setOtpExpiresAt(Instant.now().plusSeconds(600)); // 10 min
+        user.setOtpExpiresAt(Instant.now().plusSeconds(600));
         userRepository.save(user);
-        // Send via Twilio in production, console log in dev (auto-selected by Spring)
-        smsService.send(request.getPhone(),
-                "Your Loomea verification code is: " + otp + ". It expires in 10 minutes.");
+
+        emailService.sendOtp(user.getEmail(), user.getFullName(), otp);
     }
 
-    /** Step 3: verify OTP → return JWT. */
+    /** Step 3: verify email OTP → return JWT. */
     @Transactional
-    public AuthResponse verifyPhone(VerifyPhoneRequest request) {
+    public AuthResponse verifyEmail(VerifyEmailRequest request) {
         User user = userRepository.findByEmail(request.getEmail().toLowerCase())
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", request.getEmail()));
         if (user.isPhoneVerified()) {
-            // Already verified — just return a token
             return toAuthResponse(user);
         }
         if (user.getOtpCode() == null || user.getOtpExpiresAt() == null) {
@@ -116,6 +116,11 @@ public class AuthService {
         return toAuthResponse(user);
     }
 
+    /**
+     * Login. If the email is not yet verified, sends a fresh OTP and returns null
+     * (caller should check and return a PendingResponse instead).
+     */
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
@@ -123,7 +128,12 @@ public class AuthService {
         User user = userRepository.findByEmail(request.getEmail().toLowerCase())
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", request.getEmail()));
         if (!user.isPhoneVerified()) {
-            throw new BadRequestException("Phone number not verified. Please complete phone verification.");
+            String otp = String.format("%06d", new Random().nextInt(1_000_000));
+            user.setOtpCode(passwordEncoder.encode(otp));
+            user.setOtpExpiresAt(Instant.now().plusSeconds(600));
+            userRepository.save(user);
+            emailService.sendOtp(user.getEmail(), user.getFullName(), otp);
+            return null;
         }
         return toAuthResponse(user);
     }
@@ -141,7 +151,6 @@ public class AuthService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
         if (request.getFullName() != null)  user.setFullName(request.getFullName());
         if (request.getPhone() != null)     user.setPhone(request.getPhone());
-        if (request.getAvatarUrl() != null) user.setAvatarUrl(request.getAvatarUrl());
         if (request.getLocation() != null)  user.setLocation(request.getLocation());
         return toUserDto(userRepository.save(user));
     }
@@ -152,7 +161,6 @@ public class AuthService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
         byte[] imageBytes = java.util.Base64.getDecoder().decode(base64Image);
         user.setAvatarData(imageBytes);
-        user.setAvatarUrl("/api/auth/users/" + userId + "/avatar");
         return toUserDto(userRepository.save(user));
     }
 
@@ -208,41 +216,6 @@ public class AuthService {
         return toUserDto(userRepository.save(user));
     }
 
-    /** Register a staff member account using a valid invite token. Returns JWT immediately. */
-    @Transactional
-    public AuthResponse registerStaff(StaffRegisterRequest request) {
-        StaffMember member = staffMemberRepository.findByInviteToken(request.getInviteToken())
-                .orElseThrow(() -> new BadRequestException("Invalid or expired invite token"));
-
-        if (member.getInviteTokenExpiresAt() == null ||
-                LocalDateTime.now().isAfter(member.getInviteTokenExpiresAt())) {
-            throw new BadRequestException("Invite token has expired. Ask your salon owner for a new invite.");
-        }
-        if (member.getLinkedUserId() != null) {
-            throw new ConflictException("This invite has already been used");
-        }
-        if (userRepository.existsByEmail(request.getEmail().toLowerCase())) {
-            throw new ConflictException("Email is already registered");
-        }
-
-        User user = User.builder()
-                .fullName(request.getFullName())
-                .email(request.getEmail().toLowerCase())
-                .password(passwordEncoder.encode(request.getPassword()))
-                .phone(request.getPhone())
-                .role(Role.STAFF)
-                .phoneVerified(true)
-                .build();
-        user = userRepository.save(user);
-
-        member.setLinkedUserId(user.getId());
-        member.setInviteToken(null);
-        member.setInviteTokenExpiresAt(null);
-        staffMemberRepository.save(member);
-
-        return toAuthResponse(user);
-    }
-
     /**
      * Hard-deletes a user and all their data. Called by the nightly job after the
      * 30-day grace period, or directly for admin use.
@@ -273,7 +246,9 @@ public class AuthService {
                 .fullName(user.getFullName())
                 .email(user.getEmail())
                 .phone(user.getPhone())
-                .avatarUrl(user.getAvatarUrl())
+                .avatarUrl(user.getAvatarData() != null && user.getAvatarData().length > 0
+                        ? "/api/auth/users/" + user.getId() + "/avatar"
+                        : null)
                 .location(user.getLocation())
                 .role(user.getRole().name())
                 .savedSalonIds(savedIds)

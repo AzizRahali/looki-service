@@ -30,8 +30,7 @@ public class PortfolioPost {
     @Column(nullable = false, length = 200)
     private String caption;
 
-    @Column(nullable = false)
-    private String imageUrl; // stores the path "/api/portfolio/{id}/image"
+    private String imageUrl;
 
     @Column(name = "image_data", columnDefinition = "bytea")
     private byte[] imageData;

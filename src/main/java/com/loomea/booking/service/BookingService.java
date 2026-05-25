@@ -12,8 +12,6 @@ import com.loomea.common.reliability.ReliabilityTier;
 import com.loomea.salon.entity.Salon;
 import com.loomea.salon.entity.SalonService;
 import com.loomea.salon.entity.WorkingHours;
-import com.loomea.owner.entity.StaffMember;
-import com.loomea.owner.repository.StaffMemberRepository;
 import com.loomea.salon.repository.SalonRepository;
 import com.loomea.salon.repository.WorkingHoursRepository;
 import lombok.RequiredArgsConstructor;
@@ -45,7 +43,6 @@ public class BookingService {
     private final ReliabilityService reliabilityService;
     private final WorkingHoursRepository workingHoursRepository;
     private final com.loomea.booking.repository.WaitlistRepository waitlistRepository;
-    private final StaffMemberRepository staffMemberRepository;
 
     /**
      * Atomic booking creation.
@@ -113,22 +110,12 @@ public class BookingService {
 
         boolean needsConfirmation = reliabilityService.requiresConfirmation(user);
 
-        StaffMember staffMember = null;
-        if (req.getStaffMemberId() != null && !req.getStaffMemberId().isBlank()) {
-            staffMember = staffMemberRepository.findByIdAndSalonId(
-                    UUID.fromString(req.getStaffMemberId()), salon.getId()).orElse(null);
-            if (staffMember != null && !staffMember.isActive()) {
-                throw new BadRequestException("Selected staff member is not currently available");
-            }
-        }
-
         Appointment appt = Appointment.builder()
                 .user(user).salon(salon)
                 .date(req.getDate()).startTime(req.getStartTime()).endTime(endTime)
                 .paymentMethod(paymentMethod).notes(req.getNotes())
                 .totalPrice(totalPrice)
                 .requiresClientConfirmation(needsConfirmation)
-                .staffMember(staffMember)
                 .build();
 
         for (SalonService svc : selected) {
@@ -313,7 +300,9 @@ public class BookingService {
                 .salonId(a.getSalon().getId().toString())
                 .salonName(a.getSalon().getName())
                 .salonAddress(a.getSalon().getAddress())
-                .salonImageUrl(a.getSalon().getImageUrl())
+                .salonImageUrl(a.getSalon().getImageData() != null && a.getSalon().getImageData().length > 0
+                        ? "/api/salons/" + a.getSalon().getId() + "/image"
+                        : null)
                 .date(a.getDate())
                 .startTime(a.getStartTime())
                 .endTime(a.getEndTime())
@@ -324,8 +313,6 @@ public class BookingService {
                 .requiresClientConfirmation(a.isRequiresClientConfirmation())
                 .clientConfirmedAt(a.getClientConfirmedAt() != null
                         ? a.getClientConfirmedAt().toString() : null)
-                .staffMemberId(a.getStaffMember() != null ? a.getStaffMember().getId().toString() : null)
-                .staffMemberName(a.getStaffMember() != null ? a.getStaffMember().getName() : null)
                 .services(a.getServices().stream()
                         .map(s -> BookingDto.BookingServiceDto.builder()
                                 .serviceName(s.getServiceName())

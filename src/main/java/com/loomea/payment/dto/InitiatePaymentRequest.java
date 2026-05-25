@@ -15,7 +15,6 @@ public class InitiatePaymentRequest {
     private String date;         // ISO: yyyy-MM-dd
     private String startTime;    // HH:mm (24-hour)
     private List<String> serviceIds;
-    private String staffMemberId; // nullable
 
     // ── SUBSCRIPTION fields ────────────────────────────────────────────────────
     /** "MONTHLY" or "YEARLY" */

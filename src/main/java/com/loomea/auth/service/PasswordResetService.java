@@ -46,7 +46,7 @@ public class PasswordResetService {
     private final SmsService                  smsService;
     private final EmailService                emailService;
 
-    @Value("${app.deep-link-base:https://looki.app}")
+    @Value("${app.deep-link-base:https://looki.tn}")
     private String deepLinkBase;
 
     // ─── Step 1: Initiate ────────────────────────────────────────────────────
@@ -293,7 +293,9 @@ public class PasswordResetService {
                 .fullName(user.getFullName())
                 .email(user.getEmail())
                 .phone(user.getPhone())
-                .avatarUrl(user.getAvatarUrl())
+                .avatarUrl(user.getAvatarData() != null && user.getAvatarData().length > 0
+                        ? "/api/auth/users/" + user.getId() + "/avatar"
+                        : null)
                 .role(user.getRole().name())
                 .savedSalonIds(java.util.List.of())
                 .build();

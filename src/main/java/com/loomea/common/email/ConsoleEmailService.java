@@ -1,13 +1,11 @@
 package com.loomea.common.email;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.stereotype.Service;
 
-/**
- * Development email service — logs the reset link to console instead of sending.
- * Replace with a real SendGrid / SES implementation for production.
- */
 @Service
+@ConditionalOnMissingBean(SmtpEmailService.class)
 @Slf4j
 public class ConsoleEmailService implements EmailService {
 
@@ -21,5 +19,17 @@ public class ConsoleEmailService implements EmailService {
                   Link:    {}
                 ╚══════════════════════════════════════════╝
                 """, toEmail, recipientName, resetLink);
+    }
+
+    @Override
+    public void sendOtp(String toEmail, String recipientName, String otp) {
+        log.info("""
+                ╔══════════════════════════════════════════╗
+                  VERIFICATION OTP (dev console)
+                  To:      {}
+                  Name:    {}
+                  Code:    {}
+                ╚══════════════════════════════════════════╝
+                """, toEmail, recipientName, otp);
     }
 }

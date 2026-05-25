@@ -25,5 +25,4 @@ public class CreateBookingRequest {
 
     private String paymentMethod;  // PAY_AT_SALON | PAY_WITH_CARD
     private String notes;
-    private String staffMemberId; // optional — assign to a specific stylist
 }

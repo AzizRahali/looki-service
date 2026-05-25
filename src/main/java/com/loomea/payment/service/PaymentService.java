@@ -181,7 +181,6 @@ public class PaymentService {
         bookingReq.setStartTime(startTime);
         bookingReq.setServiceIds(req.getServiceIds());
         bookingReq.setPaymentMethod("PAY_WITH_CARD");
-        bookingReq.setStaffMemberId(req.getStaffMemberId());
 
         BookingDto booking = bookingService.create(user.getId(), bookingReq);
         String appointmentId = booking.getId();

@@ -24,6 +24,16 @@
       serialization:
         FAIL_ON_EMPTY_BEANS: false
 
+    mail:
+      host: smtp.gmail.com
+      port: 587
+      username: ${GMAIL_USERNAME:}
+      password: ${GMAIL_APP_PASSWORD:}
+      properties:
+        "mail.smtp.auth": true
+        "mail.smtp.starttls.enabled": true
+        "mail.smtp.starttls.required": true
+
   server:
     port: ${PORT:8080}
 
@@ -46,7 +56,7 @@
       success-url: ${STRIPE_SUCCESS_URL:https://loomea.app/payment/success}
       cancel-url: ${STRIPE_CANCEL_URL:https://loomea.app/payment/cancel}
 
-    # Twilio (optional — uses env vars)
+    # Twilio (SMS for password recovery)
     twilio:
       account-sid: ${TWILIO_ACCOUNT_SID:}
       auth-token: ${TWILIO_AUTH_TOKEN:}
