@@ -50,7 +50,6 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/auth/verify-email").permitAll()
                         // Password reset — must be public (user has no token yet)
                         .requestMatchers(HttpMethod.POST, "/api/auth/forgot-password").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/verify-recovery-otp").permitAll()
                         .requestMatchers(HttpMethod.GET,  "/api/auth/validate-reset-token").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/reset-password").permitAll()
                         // User avatars — public for booking cards & reviews

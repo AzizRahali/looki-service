@@ -19,48 +19,38 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@Tag(name = "Password Reset", description = "Recover account access via SMS OTP or email link")
+@Tag(name = "Password Reset", description = "Recover account access via email link")
 public class PasswordResetController {
 
     private final PasswordResetService passwordResetService;
 
-    // ── Step 1 ────────────────────────────────────────────────────────────────
+    // -- Step 1 ----------------------------------------------------------------
 
     @PostMapping("/forgot-password")
     @Operation(
         summary = "Initiate password reset",
         description = """
-            Step 1. Accepts a phone number (E.164) or email address.
+            Step 1. Accepts an email address.
 
-            Always returns HTTP 200 — never reveals whether the account exists.
+            Always returns HTTP 200 -- never reveals whether the account exists.
 
-            **`method` in the response tells you what to do next:**
-            | Value | Next step |
-            |-------|-----------|
-            | `sms` | User receives a 6-digit SMS code → call `/verify-recovery-otp` |
-            | `email` | User receives an email link → call `/validate-reset-token` when link is opened |
-            | `choice` | Account has both phone and email → resend with `preferredMethod` set |
+            A reset link is sent to the email. The client should call
+            `/validate-reset-token` when the deep link opens the app.
             """
     )
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "200",
             description = "Recovery initiated",
-            content = @Content(examples = @ExampleObject(name = "SMS sent", value = """
+            content = @Content(examples = @ExampleObject(value = """
                 {
                   "success": true,
                   "message": "Recovery initiated.",
                   "data": {
-                    "method": "sms",
-                    "sessionId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-                    "hint": "●●● ●●3"
+                    "hint": "r*****@gmail.com"
                   }
                 }
                 """))
-        ),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(
-            responseCode = "400",
-            description = "rate_limited — too many OTP requests for this phone in the last hour"
         )
     })
     public ResponseEntity<ApiResponse<ForgotPasswordResponse>> forgotPassword(
@@ -69,59 +59,13 @@ public class PasswordResetController {
         return ResponseEntity.ok(ApiResponse.success("Recovery initiated.", response));
     }
 
-    // ── Step 2A: SMS path ─────────────────────────────────────────────────────
-
-    @PostMapping("/verify-recovery-otp")
-    @Operation(
-        summary = "Verify SMS recovery OTP",
-        description = """
-            Step 2 (SMS path). Submit the 6-digit code the user received by SMS.
-
-            - OTP expires in **5 minutes**.
-            - Max **3 wrong attempts** — then locked; user must request a new code.
-            - On success returns an opaque `resetToken` valid for **15 minutes**.
-              Pass it to `/reset-password`.
-
-            **Error patterns in the `message` field:**
-            | Pattern | Meaning |
-            |---------|---------|
-            | `invalid_otp:2` | Wrong code, 2 attempts remaining |
-            | `invalid_otp:1` | Wrong code, 1 attempt remaining |
-            | `invalid_otp:0` | Wrong code, code now locked |
-            | `too_many_attempts` | Already locked |
-            | `code_expired` | OTP TTL exceeded |
-            """
-    )
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(
-            responseCode = "200",
-            description = "OTP verified — reset token issued",
-            content = @Content(examples = @ExampleObject(value = """
-                {
-                  "success": true,
-                  "message": "OTP verified.",
-                  "data": { "resetToken": "550e8400-e29b-41d4-a716-446655440000" }
-                }
-                """))
-        ),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(
-            responseCode = "400",
-            description = "Wrong OTP, expired OTP, or code locked"
-        )
-    })
-    public ResponseEntity<ApiResponse<Map<String, String>>> verifyRecoveryOtp(
-            @Valid @RequestBody VerifyRecoveryOtpRequest request) {
-        String resetToken = passwordResetService.verifyOtp(request);
-        return ResponseEntity.ok(ApiResponse.success("OTP verified.", Map.of("resetToken", resetToken)));
-    }
-
-    // ── Step 2B: Email path ───────────────────────────────────────────────────
+    // -- Step 2: Validate email token ------------------------------------------
 
     @GetMapping("/validate-reset-token")
     @Operation(
         summary = "Validate email reset token",
         description = """
-            Step 2 (email path). Called when the mobile app opens via the deep link
+            Step 2. Called when the mobile app opens via the deep link
             `loomea://reset?token=...`.
 
             Returns `{ "valid": true }` if the token is unused and within the 15-minute TTL.
@@ -149,19 +93,19 @@ public class PasswordResetController {
         return ResponseEntity.ok(ApiResponse.success(Map.of("valid", valid)));
     }
 
-    // ── Step 3 ────────────────────────────────────────────────────────────────
+    // -- Step 3 ----------------------------------------------------------------
 
     @PostMapping("/reset-password")
     @Operation(
         summary = "Set new password",
         description = """
-            Final step (both paths). Provide the `resetToken` from step 2 and the
+            Final step. Provide the `resetToken` from the email link and the
             new password (min 8 characters).
 
             On success:
             - Password is updated (bcrypt-hashed).
             - Reset token is invalidated (single-use).
-            - A fresh JWT `accessToken` is returned — client can auto-login.
+            - A fresh JWT `accessToken` is returned -- client can auto-login.
 
             **Error codes in `message`:**
             | Code | Meaning |
@@ -173,7 +117,7 @@ public class PasswordResetController {
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "200",
-            description = "Password updated — JWT access token returned",
+            description = "Password updated -- JWT access token returned",
             content = @Content(examples = @ExampleObject(value = """
                 {
                   "success": true,

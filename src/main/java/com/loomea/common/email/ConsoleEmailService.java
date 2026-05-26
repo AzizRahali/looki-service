@@ -5,7 +5,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.stereotype.Service;
 
 @Service
-@ConditionalOnMissingBean(SmtpEmailService.class)
+@ConditionalOnMissingBean(SendGridEmailService.class)
 @Slf4j
 public class ConsoleEmailService implements EmailService {
 

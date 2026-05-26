@@ -24,18 +24,6 @@
       serialization:
         FAIL_ON_EMPTY_BEANS: false
 
-    mail:
-      host: smtp.gmail.com
-      port: 465
-      username: ${GMAIL_USERNAME:}
-      password: ${GMAIL_APP_PASSWORD:}
-      protocol: smtps
-      properties:
-        "mail.smtps.auth": true
-        "mail.smtps.ssl.enable": true
-        "mail.smtps.timeout": 10000
-        "mail.smtps.connectiontimeout": 10000
-
   server:
     port: ${PORT:8080}
 
@@ -48,6 +36,11 @@
     booking:
       pending-timeout-minutes: 15
 
+    # SendGrid (email OTP & password reset)
+    sendgrid:
+      api-key: ${SENDGRID_API_KEY:}
+      from-email: ${SENDGRID_FROM_EMAIL:noreply@looki.tn}
+
     # Stripe payment gateway
     stripe:
       secret-key: "sk_test_51TQUOoGclSemIXgylgchCPmsh3uxS27oRNyDMFUZIU5E7nb1NcISLJYsepkR9HfhqpwL7VO8t01LzHfA9MlUFa5Z00gg3rKtYx"
@@ -57,12 +50,6 @@
       # Intercepted by the in-app WebView — don't need to resolve as real pages.
       success-url: ${STRIPE_SUCCESS_URL:https://loomea.app/payment/success}
       cancel-url: ${STRIPE_CANCEL_URL:https://loomea.app/payment/cancel}
-
-    # Twilio (SMS for password recovery)
-    twilio:
-      account-sid: ${TWILIO_ACCOUNT_SID:}
-      auth-token: ${TWILIO_AUTH_TOKEN:}
-      phone-number: ${TWILIO_PHONE_NUMBER:}
 
   # OpenAPI / Swagger
   springdoc:

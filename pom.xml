@@ -94,17 +94,11 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Spring Mail (Gmail SMTP) -->
+        <!-- SendGrid HTTP email API -->
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-mail</artifactId>
-        </dependency>
-
-        <!-- Twilio SDK for SMS (password recovery) -->
-        <dependency>
-            <groupId>com.twilio.sdk</groupId>
-            <artifactId>twilio</artifactId>
-            <version>10.7.0</version>
+            <groupId>com.sendgrid</groupId>
+            <artifactId>sendgrid-java</artifactId>
+            <version>4.10.3</version>
         </dependency>
 
         <!-- OpenAPI / Swagger (upgrade when Spring Boot 4 compatible version released) -->
