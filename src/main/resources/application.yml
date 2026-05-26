@@ -26,13 +26,15 @@
 
     mail:
       host: smtp.gmail.com
-      port: 587
+      port: 465
       username: ${GMAIL_USERNAME:}
       password: ${GMAIL_APP_PASSWORD:}
+      protocol: smtps
       properties:
-        "mail.smtp.auth": true
-        "mail.smtp.starttls.enabled": true
-        "mail.smtp.starttls.required": true
+        "mail.smtps.auth": true
+        "mail.smtps.ssl.enable": true
+        "mail.smtps.timeout": 10000
+        "mail.smtps.connectiontimeout": 10000
 
   server:
     port: ${PORT:8080}
