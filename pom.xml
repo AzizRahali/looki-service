@@ -11,11 +11,11 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.loomea</groupId>
-    <artifactId>loomea-service</artifactId>
+    <groupId>com.looki</groupId>
+    <artifactId>looki-service</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>Loomea Service</name>
-    <description>Loomea Salon Booking Backend — Modular Monolith</description>
+    <name>Looki Service</name>
+    <description>Looki Salon Booking Backend — Modular Monolith</description>
 
     <properties>
         <java.version>17</java.version>

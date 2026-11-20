@@ -1,6 +1,6 @@
-# Loomea Service
+# Looki Service
 
-Spring Boot REST API backend for the Loomea salon booking platform. Handles authentication, salon management, booking lifecycle, staff team management with QR-based onboarding, owner dashboard, and real payments via Konnect.
+Spring Boot REST API backend for the Looki salon booking platform. Handles authentication, salon management, booking lifecycle, staff team management with QR-based onboarding, owner dashboard, and real payments via Konnect.
 
 ---
 
@@ -46,7 +46,7 @@ Set the following environment variables:
 ```env
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=loomea
+DB_NAME=looki
 DB_USERNAME=postgres
 DB_PASSWORD=secret
 JWT_SECRET=your-256-bit-secret-key-at-least-32-chars-long
@@ -62,7 +62,7 @@ http://localhost:8080/swagger-ui.html
 
 ```
 http://localhost:8080/h2-console
-JDBC URL: jdbc:h2:mem:loomea
+JDBC URL: jdbc:h2:mem:looki
 ```
 
 ---
@@ -70,7 +70,7 @@ JDBC URL: jdbc:h2:mem:loomea
 ## Project Structure
 
 ```
-src/main/java/com/loomea/
+src/main/java/com/looki/
 ├── auth/                   # Authentication & user management
 │   ├── controller/
 │   ├── dto/                # incl. StaffRegisterRequest
@@ -340,7 +340,7 @@ Generates a one-time invite token valid for **7 days**. Calling it again on a pe
   "data": {
     "staffId": "uuid",
     "inviteToken": "abc123...",
-    "deepLink": "loomea://staff/join?token=abc123...",
+    "deepLink": "looki://staff/join?token=abc123...",
     "expiresAt": "2026-05-03T12:00:00"
   }
 }
@@ -608,7 +608,7 @@ Every client has a **reliability score** (0–120, default 100) that reflects bo
 
 ## Konnect Payment Integration
 
-Loomea uses [Konnect](https://konnect.network) as its hosted payment gateway (Tunisian market — TND). Card entry happens entirely on Konnect's page; no card data touches the backend.
+Looki uses [Konnect](https://konnect.network) as its hosted payment gateway (Tunisian market — TND). Card entry happens entirely on Konnect's page; no card data touches the backend.
 
 ### Flow
 

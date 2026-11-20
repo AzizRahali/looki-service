@@ -1,6 +1,6 @@
   spring:
     application:
-      name: loomea-service
+      name: looki-service
 
     datasource:
       url: ${SPRING_DATASOURCE_URL}
@@ -47,9 +47,14 @@
       # Optional: Stripe webhook endpoint secret (whsec_...).
       # Leave blank to rely solely on Flutter polling (fine for local dev).
       webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
-      # Intercepted by the in-app WebView — don't need to resolve as real pages.
-      success-url: ${STRIPE_SUCCESS_URL:https://loomea.app/payment/success}
-      cancel-url: ${STRIPE_CANCEL_URL:https://loomea.app/payment/cancel}
+      # Currency every charge is made in (the Stripe account can't charge TND).
+      currency: ${STRIPE_CURRENCY:usd}
+      # Charge-currency units per 1 TND of app price. 1 = charge the number as-is.
+      conversion-rate: ${STRIPE_CONVERSION_RATE:1}
+      # Leave blank to use {backend}/api/payments/return, which the in-app
+      # WebView intercepts and browsers show as a "return to the app" page.
+      success-url: ${STRIPE_SUCCESS_URL:}
+      cancel-url: ${STRIPE_CANCEL_URL:}
 
   # OpenAPI / Swagger
   springdoc:
