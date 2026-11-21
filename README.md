@@ -12,8 +12,7 @@ Spring Boot REST API backend for the Loomea salon booking platform. Handles auth
 | Language | Java 17 |
 | Security | Spring Security + JWT (JJWT 0.12.6) |
 | Persistence | Spring Data JPA / Hibernate |
-| Database (dev) | H2 (in-memory) |
-| Database (prod) | PostgreSQL |
+| Database | PostgreSQL |
 | API Docs | SpringDoc OpenAPI (Swagger UI) |
 | Build | Maven |
 
@@ -25,44 +24,130 @@ Spring Boot REST API backend for the Loomea salon booking platform. Handles auth
 
 - Java 17+
 - Maven 3.8+
-- PostgreSQL (production only)
+- Docker Desktop (for local PostgreSQL)
 
-### Run in Development (H2)
+### Run locally with persistent PostgreSQL
+
+PostgreSQL runs in Docker and stores its data in the `looki-postgres-data`
+Docker volume, bound to localhost only. Settings and secrets are kept in a file
+**outside the repository**:
+
+- Windows: `%LOCALAPPDATA%\Looki\postgres.env`
+- macOS/Linux: `~/.looki/local.env`
+- or any path set in the `LOOKI_ENV_FILE` environment variable
+
+First-time setup: copy [`local.env.example`](local.env.example) to that path
+and fill it in (database password, JWT secret, and optionally the AI settings
+and demo password). Then start the backend; on the first run the script creates
+the `looki-postgres` container:
 
 ```bash
-mvn spring-boot:run
+./run-local.sh                                         # Git Bash, macOS, Linux
+powershell -ExecutionPolicy Bypass -File .\run-local.ps1  # Windows PowerShell
 ```
 
-The server starts on **http://localhost:8080** with an in-memory H2 database. Sample data is seeded automatically via `DataSeeder`.
+The backend listens on **http://localhost:8081**. The database container uses
+Docker's `unless-stopped` restart policy, so it starts again when Docker Desktop
+starts. To stop or start only PostgreSQL, use `docker stop looki-postgres` or
+`docker start looki-postgres`. Stopping the container does not delete database
+data; removing the `looki-postgres-data` volume does.
 
-### Run with Docker / PostgreSQL
+The Flutter web app can connect to this backend with:
+
+```powershell
+cd ..\Looki-app
+flutter run -d chrome --dart-define=USE_MOCK_DATA=false --dart-define=API_BASE_URL=http://localhost:8081
+```
+
+### Production database
+
+For deployment, configure `SPRING_DATASOURCE_URL`,
+`SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, and `JWT_SECRET`
+with your hosting provider's secret manager.
+
+### AI features
+
+All three features use one small open model (Qwen3-4B) hosted on
+[Modal](https://modal.com), defined in `ai/looki_ai_modal.py`. The model never
+decides results on its own: the backend validates everything it returns, and
+each feature keeps working without AI.
+
+**Smart search** — `GET /api/search/smart?q=...` accepts natural-language
+queries in English, French or Tunisian Arabic (e.g. "manucure à La Marsa
+samedi", "nheb n9os cha3ri f sousse ghodwa"). The model only extracts filters
+(service, category, location, maximum price, day and time). The backend
+validates them against the service catalog and then searches the database,
+including working hours and booked slots. Without AI, it falls back to keyword
+search (`aiUsed: false`).
+
+**Owner insights** — `GET /api/owner/salons/{salonId}/insights?lang=en|fr|ar`
+returns numbers the backend computes for the last 28 days compared with the 28
+days before: bookings, revenue, cancellation and no-show rates, returning
+clients, top services, busiest and quietest weekly time slots, and upcoming
+bookings. When there are at least 5 bookings in the period, the model writes a
+short summary and suggestions from those numbers only (no client data is sent).
+It writes in English and then translates to French or Tunisian Arabic. The
+backend drops any AI text containing a number that is not in the computed
+facts. Without AI, the numbers are still returned (`aiUsed: false`).
+
+**Support assistant** — `POST /api/support/chat` (any signed-in user) with
+`{"language": "en|fr|ar", "messages": [{"role": "user|assistant", "text": "..."}]}`
+answers how-to questions using only the help articles in
+`src/main/resources/support/help-articles.md`. Clients and salon owners get
+different articles. The model writes in English and translates, using the app's
+own button and tab names from `support/ui-terms.json`. The backend accepts an
+answer only if it cites real articles and contains no number, email address or
+link that is not in them; otherwise `answered` is false and the app points the
+user to support@loomea.app. The assistant cannot see or change bookings. Each
+user can send up to 6 messages a minute and 60 a day.
+
+The assistant is only as accurate as the articles: update
+`help-articles.md` whenever app behaviour or wording changes, and keep button
+names as they appear in the English app.
+
+Setup:
+
+1. Install the Modal client and log in: `pip install modal`, then `modal setup`.
+2. Create a random token and store it as a Modal secret:
+   `modal secret create looki-ai API_TOKEN=<token>`.
+3. Deploy: `modal deploy ai/looki_ai_modal.py`. Note the three printed URLs.
+4. Configure the backend with `MODAL_AI_TOKEN`, `MODAL_SEARCH_URL` (the
+   `parse` URL), `MODAL_INSIGHTS_URL` (the `insights` URL) and
+   `MODAL_SUPPORT_URL` (the `support` URL) in your local settings file (see
+   above); the run scripts load them. To use a deployment someone else already
+   made, ask them for the token and the three URLs. Share the token privately
+   (for example in a password manager), never in Git or chat history: anyone
+   with it can spend that Modal account's credits.
+
+Cost controls: the model runs on one L4 GPU at most and shuts down after 5 idle
+minutes. The backend caches repeated results and limits AI calls to
+`MODAL_AI_MAX_REQUESTS_PER_MINUTE` (default 20, shared by all features). The
+first request after idling waits for a cold start (typically ~30 s; longer
+after a deploy or when GPUs are scarce), and falls back after
+`MODAL_AI_TIMEOUT_SECONDS` (default 90).
+
+To try them locally, load the demo data (safe to re-run). `demo_salons.sql`
+adds salons named `[Demo] …`; `demo_owner.sql` adds the owner
+`owner@looki.demo` for "[Demo] Salon Yasmine", demo clients (`@looki.demo`),
+and 8 weeks of bookings. Choose the password when loading it; it is used by
+`owner@looki.demo` and by the client `client1@looki.demo`:
 
 ```bash
-mvn spring-boot:run -Dspring-boot.run.profiles=docker
+docker exec -i looki-postgres psql -U loomea -d loomea < ai/demo_salons.sql
+docker exec -i looki-postgres psql -U loomea -d loomea -v owner_password='<password>' < ai/demo_owner.sql
 ```
 
-Set the following environment variables:
+In Windows PowerShell, pipe the files instead:
 
-```env
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=loomea
-DB_USERNAME=postgres
-DB_PASSWORD=secret
-JWT_SECRET=your-256-bit-secret-key-at-least-32-chars-long
+```powershell
+Get-Content -Encoding UTF8 ai\demo_salons.sql | docker exec -i looki-postgres psql -U loomea -d loomea
+Get-Content -Encoding UTF8 ai\demo_owner.sql | docker exec -i looki-postgres psql -U loomea -d loomea -v owner_password=<password>
 ```
 
 ### Swagger UI
 
 ```
 http://localhost:8080/swagger-ui.html
-```
-
-### H2 Console (dev only)
-
-```
-http://localhost:8080/h2-console
-JDBC URL: jdbc:h2:mem:loomea
 ```
 
 ---
@@ -159,6 +244,14 @@ http://localhost:8080
 
 ---
 
+### Support
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/support/chat` | JWT | Ask the AI support assistant (see [AI features](#ai-features)) |
+
+---
+
 ### Auth
 
 | Method | Endpoint | Auth | Description |
@@ -250,6 +343,7 @@ GET /api/salons/nearby?lat=40.7128&lng=-74.0060&radius=5
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
 | `GET` | `/api/search` | Public | Search salons by name, address or description |
+| `GET` | `/api/search/smart?q=` | Public | Natural-language search (see [AI features](#ai-features)) |
 | `GET` | `/api/search/category/{category}` | Public | Filter salons by category |
 
 ---
@@ -451,6 +545,7 @@ Statuses: `PENDING` | `COMPLETED` | `FAILED`
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/owner/salons/{salonId}/dashboard` | Salon stats & today's bookings |
+| `GET` | `/api/owner/salons/{salonId}/insights?lang=` | 28-day insights with AI summary (see [AI features](#ai-features)) |
 
 **Response:**
 ```json
