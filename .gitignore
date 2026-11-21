@@ -31,3 +31,9 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Local settings and caches ###
+local.env
+*.local.env
+__pycache__/
+

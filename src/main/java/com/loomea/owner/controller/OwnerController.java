@@ -3,6 +3,8 @@ package com.loomea.owner.controller;
 import com.loomea.booking.dto.BookingDto;
 import com.loomea.common.dto.ApiResponse;
 import com.loomea.owner.dto.*;
+import com.loomea.owner.insights.OwnerInsightsDto;
+import com.loomea.owner.insights.OwnerInsightsService;
 import com.loomea.salon.dto.WorkingHoursDto;
 import com.loomea.owner.service.OwnerService;
 import com.loomea.salon.dto.CreatePortfolioPostRequest;
@@ -32,6 +34,7 @@ import java.util.UUID;
 public class OwnerController {
 
     private final OwnerService ownerService;
+    private final OwnerInsightsService ownerInsightsService;
 
     // ──────────────── Salon CRUD ────────────────
 
@@ -281,5 +284,15 @@ public class OwnerController {
             @PathVariable UUID salonId, @AuthenticationPrincipal UserDetails user) {
         return ResponseEntity.ok(ApiResponse.success(
                 ownerService.getDashboard(salonId, UUID.fromString(user.getUsername()))));
+    }
+
+    @GetMapping("/salons/{salonId}/insights")
+    @Operation(summary = "Business insights for the last 28 days, with an AI summary when available")
+    public ResponseEntity<ApiResponse<OwnerInsightsDto>> insights(
+            @PathVariable UUID salonId,
+            @RequestParam(defaultValue = "en") String lang,
+            @AuthenticationPrincipal UserDetails user) {
+        return ResponseEntity.ok(ApiResponse.success(
+                ownerInsightsService.getInsights(salonId, UUID.fromString(user.getUsername()), lang)));
     }
 }

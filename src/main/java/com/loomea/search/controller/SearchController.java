@@ -2,6 +2,7 @@ package com.loomea.search.controller;
 
 import com.loomea.common.dto.ApiResponse;
 import com.loomea.salon.dto.SalonDto;
+import com.loomea.search.dto.SmartSearchResponse;
 import com.loomea.search.service.SearchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,6 +27,13 @@ public class SearchController {
     public ResponseEntity<ApiResponse<List<SalonDto>>> search(
             @RequestParam(required = false, defaultValue = "") String q) {
         return ResponseEntity.ok(ApiResponse.success(searchService.search(q)));
+    }
+
+    @GetMapping("/smart")
+    @Operation(summary = "Natural-language search in English, French or Tunisian Arabic")
+    public ResponseEntity<ApiResponse<SmartSearchResponse>> smart(
+            @RequestParam(required = false, defaultValue = "") String q) {
+        return ResponseEntity.ok(ApiResponse.success(searchService.smartSearch(q)));
     }
 
     @GetMapping("/category/{category}")

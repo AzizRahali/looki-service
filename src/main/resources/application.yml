@@ -36,6 +36,21 @@
     booking:
       pending-timeout-minutes: 15
 
+    # Looki AI model hosted on Modal (see ai/looki_ai_modal.py). Features fall
+    # back to non-AI behaviour when their URL or the token is empty.
+    ai:
+      modal-token: ${MODAL_AI_TOKEN:}
+      timeout-seconds: ${MODAL_AI_TIMEOUT_SECONDS:90}
+      max-requests-per-minute: ${MODAL_AI_MAX_REQUESTS_PER_MINUTE:20}
+    smart-search:
+      modal-url: ${MODAL_SEARCH_URL:}
+    owner-insights:
+      modal-url: ${MODAL_INSIGHTS_URL:}
+    support:
+      modal-url: ${MODAL_SUPPORT_URL:}
+    # Business time zone for "today", availability and insights periods.
+    time-zone: Africa/Tunis
+
     # SendGrid (email OTP & password reset)
     sendgrid:
       api-key: ${SENDGRID_API_KEY:}
